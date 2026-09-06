@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Instrument Sans", "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* light, cool-neutral base - not warm paper/cream */
+  --color-paper: #f7f8fa;
+  --color-paper-dim: #eef0f3;
+  --color-ink: #10151c;
+  --color-ink-soft: #4c5563;
+  --color-ink-faint: #8891a0;
+  --color-line: #e2e6eb;
+  --color-line-strong: #c7cfd8;
+
+  /* terminal-green accent, tuned for contrast on white */
+  --color-pine: #0fa968;
+  --color-pine-dim: #0b8552;
+  --color-pine-tint: rgba(15, 169, 104, 0.09);
+
+  /* amber, used for suggested/attention states */
+  --color-gold: #c2760a;
+  --color-gold-tint: rgba(194, 118, 10, 0.09);
+
+  /* coral-red, used for errors/warnings */
+  --color-clay: #d6402a;
+  --color-clay-tint: rgba(214, 64, 42, 0.08);
+}
+
+@layer base {
+  html {
+    background: var(--color-paper);
+    color-scheme: light;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    color: var(--color-ink);
+    background:
+      radial-gradient(900px 480px at 12% -10%, rgba(15, 169, 104, 0.06), transparent 60%),
+      radial-gradient(700px 420px at 92% 0%, rgba(194, 118, 10, 0.05), transparent 55%),
+      repeating-linear-gradient(0deg, rgba(16, 21, 28, 0.028) 0 1px, transparent 1px 40px),
+      repeating-linear-gradient(90deg, rgba(16, 21, 28, 0.028) 0 1px, transparent 1px 40px),
+      var(--color-paper);
+    min-height: 100vh;
+  }
+
+  ::selection {
+    background: var(--color-pine-tint);
+    color: var(--color-ink);
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+
+  .paper-card {
+    background: #ffffff;
+    border: 1px solid var(--color-line);
+    box-shadow: 0 1px 0 rgba(16, 21, 28, 0.02), 0 10px 24px -18px rgba(16, 21, 28, 0.16);
+  }
+
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    color: #111 !important;
+  }
+  .paper-card {
+    background: white !important;
+    box-shadow: none !important;
+    border-color: #ccc !important;
+  }
+}
