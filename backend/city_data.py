@@ -14,6 +14,7 @@ CITY_DATA: dict[str, dict] = {
         "label": "Latur, Maharashtra",
         "state": "Maharashtra",
         "district": "Latur",
+        "coords": {"lat": 18.40, "lon": 76.57},
         "blocks": ["Latur", "Ausa", "Nilanga", "Renapur", "Chakur"],
         "profile_note": "Major tur dal (pigeon pea) and soybean mandi belt in the Marathwada region.",
         "commodities": {
@@ -39,6 +40,7 @@ CITY_DATA: dict[str, dict] = {
         "label": "Sitapur, Uttar Pradesh",
         "state": "Uttar Pradesh",
         "district": "Sitapur",
+        "coords": {"lat": 27.57, "lon": 80.68},
         "blocks": ["Biswan", "Mahmoodabad", "Sidhauli", "Laharpur", "Machhrehta"],
         "profile_note": "Sugarcane and paddy belt in central Awadh, dense weekly haats (rural markets).",
         "commodities": {
@@ -64,6 +66,7 @@ CITY_DATA: dict[str, dict] = {
         "label": "Indore, Madhya Pradesh",
         "state": "Madhya Pradesh",
         "district": "Indore",
+        "coords": {"lat": 22.72, "lon": 75.86},
         "blocks": ["Sanwer", "Depalpur", "Mhow", "Hatod", "Rau"],
         "profile_note": "MP's largest commercial hub - dense retail, textile and namkeen (snack) trade.",
         "commodities": {

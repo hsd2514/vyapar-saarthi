@@ -17,7 +17,7 @@ from pydantic_ai import Agent
 
 load_dotenv()
 
-AGENT_MODEL = os.environ.get("AGENT_MODEL", "google:gemini-2.0-flash")
+AGENT_MODEL = os.environ.get("AGENT_MODEL", "google:gemini-2.5-flash")
 
 BUSINESS_TYPE_VALUES = ("vendor", "dairy", "tailoring", "retail", "handicrafts", "food_stall")
 DISTRICT_VALUES = ("latur", "sitapur", "indore")
@@ -38,6 +38,17 @@ class ProfilePatch(BaseModel):
     years_in_operation: float | None = Field(default=None, description="How many years the business has run.")
     challenges: list[Literal["pricing", "stock", "credit", "seasonal", "records"]] = Field(
         default_factory=list, description="Challenges the speaker mentioned, mapped to these fixed categories."
+    )
+    field_confidence: dict[str, Literal["high", "low"]] = Field(
+        default_factory=dict,
+        description=(
+            "Confidence level for each extracted field. Set a field to 'low' when the speaker was vague, "
+            "approximate, or hedging (e.g. 'kaafi paisa', 'lagbhag', 'around', 'not sure', 'pata nahi exact'). "
+            "Set to 'high' when the speaker gave a specific, unambiguous value. "
+            "Only include fields that have been filled in this or a prior turn. "
+            "monthly_revenue is especially important to flag low when approximate, because it drives "
+            "break-even, working-capital, and loan-scheme calculations downstream."
+        ),
     )
 
 
@@ -62,6 +73,17 @@ Your only job is to fill these fields through natural conversation:
 - monthly_revenue: rough monthly earnings in rupees (accept approximate answers like "10-15 hazar")
 - years_in_operation: how long they've run the business
 - challenges: any of pricing, stock, credit, seasonal swings, or record-keeping they mention unprompted
+
+CONFIDENCE RULES — always populate field_confidence for every filled field:
+- Mark "high" when the speaker gave a specific, unambiguous value (e.g. "ek lakh", "Rs 15,000", "3 saal").
+- Mark "low" when the speaker was vague, approximate, or hedging. Examples that must be marked low:
+    monthly_revenue: "kaafi paisa", "lagbhag 10-15 hazar", "around one lakh", "pata nahi exactly",
+                     "thoda kam ya zyada", ranges like "8 se 12 hazar", or any answer with uncertainty.
+    years_in_operation: "kaafi saalon se", "kuch saal", "shayad 2-3 saal"
+    block: if the speaker named a locality that you had to infer as a block.
+- monthly_revenue is especially critical: it feeds every financial calculation (break-even, working
+  capital, loan eligibility). Always prefer to ask a clarifying follow-up if the answer was a range
+  or contained words like "lagbhag", "around", "pata nahi", "thoda" — and mark it low.
 
 Never invent a number they didn't say. If unsure, ask a clarifying follow-up instead of guessing.
 Once all five required fields (business_type, district, block, monthly_revenue,

@@ -9,7 +9,7 @@ import VoiceAgent from "../components/VoiceAgent";
 const REQUIRED_FIELDS = ["businessType", "district", "block", "monthlyRevenue", "yearsInOperation"];
 
 export default function Intake() {
-  const { profile, updateProfile, intakeDone, markStepReached } = useAppState();
+  const { profile, fieldConfidence, updateProfile, intakeDone, markStepReached } = useAppState();
   const [districts, setDistricts] = useState([]);
 
   useEffect(() => {
@@ -23,6 +23,30 @@ export default function Intake() {
 
   const isValid = REQUIRED_FIELDS.every((f) => profile[f] !== "" && profile[f] !== undefined && profile[f] !== null);
   const currentDistrict = districts.find((d) => d.key === profile.district);
+
+  // Map backend snake_case field names to frontend camelCase keys used in fieldConfidence.
+  const FIELD_KEY_MAP = {
+    businessType: "business_type",
+    district: "district",
+    block: "block",
+    monthlyRevenue: "monthly_revenue",
+    yearsInOperation: "years_in_operation",
+  };
+
+  /** Amber dot shown when the agent flagged this field as low-confidence. */
+  function ConfidenceDot({ fieldKey }) {
+    const backendKey = FIELD_KEY_MAP[fieldKey];
+    if (!backendKey || fieldConfidence[backendKey] !== "low") return null;
+    return (
+      <span
+        title="Saarthi marked this value as approximate or uncertain — please double-check before continuing"
+        className="ml-1.5 inline-flex items-center"
+      >
+        <span className="h-2 w-2 rounded-full bg-[#d4860a] inline-block" aria-label="Low confidence — verify this value" />
+        <span className="ml-1 text-[10px] font-mono text-[#7a5a12] leading-none">approx.</span>
+      </span>
+    );
+  }
 
   return (
     <div>
@@ -42,7 +66,7 @@ export default function Intake() {
           </div>
 
           <div className="space-y-4">
-            <Field label="Business type">
+            <Field label={<span className="flex items-center">Business type<ConfidenceDot fieldKey="businessType" /></span>}>
               <Select value={profile.businessType} onChange={(e) => updateProfile({ businessType: e.target.value })}>
                 <option value="">Not yet mentioned</option>
                 {Object.entries(BUSINESS_TYPE_LABELS).map(([value, label]) => (
@@ -54,7 +78,7 @@ export default function Intake() {
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
-              <Field label="District">
+              <Field label={<span className="flex items-center">District<ConfidenceDot fieldKey="district" /></span>}>
                 <Select value={profile.district} onChange={(e) => updateProfile({ district: e.target.value, block: "" })}>
                   <option value="">Not yet mentioned</option>
                   {districts.map((d) => (
@@ -64,7 +88,7 @@ export default function Intake() {
                   ))}
                 </Select>
               </Field>
-              <Field label="Block">
+              <Field label={<span className="flex items-center">Block<ConfidenceDot fieldKey="block" /></span>}>
                 <Select value={profile.block} onChange={(e) => updateProfile({ block: e.target.value })} disabled={!currentDistrict}>
                   <option value="">Not yet mentioned</option>
                   {(currentDistrict?.blocks || []).map((b) => (
@@ -77,10 +101,10 @@ export default function Intake() {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Monthly revenue">
+              <Field label={<span className="flex items-center">Monthly revenue<ConfidenceDot fieldKey="monthlyRevenue" /></span>}>
                 <NumberInput prefix="Rs" value={profile.monthlyRevenue} onChange={(e) => updateProfile({ monthlyRevenue: e.target.value })} placeholder="e.g. 18000" />
               </Field>
-              <Field label="Years running">
+              <Field label={<span className="flex items-center">Years running<ConfidenceDot fieldKey="yearsInOperation" /></span>}>
                 <NumberInput suffix="yrs" value={profile.yearsInOperation} onChange={(e) => updateProfile({ yearsInOperation: e.target.value })} placeholder="e.g. 2" />
               </Field>
             </div>

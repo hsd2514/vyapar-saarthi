@@ -11,6 +11,10 @@ const defaultProfile = {
   challenges: [],
 };
 
+// Tracks which profile fields the agent marked as low-confidence (vague/approximate).
+// Shape: { [fieldName: string]: "high" | "low" }  — only contains filled fields.
+const defaultFieldConfidence = {};
+
 const defaultCalculators = {
   breakEven: { fixedCosts: "", variableCostPerUnit: "", pricePerUnit: "" },
   pricing: { unitCost: "", desiredMarginPct: "", marketPrice: "" },
@@ -19,6 +23,7 @@ const defaultCalculators = {
 
 const initialState = {
   profile: defaultProfile,
+  fieldConfidence: defaultFieldConfidence,
   calculators: defaultCalculators,
   conversation: [], // [{ role: "agent" | "user", text: string }]
   agentHistory: [], // raw pydantic-ai message history, round-tripped to the backend
@@ -33,6 +38,7 @@ function loadInitial() {
     const parsed = JSON.parse(raw);
     return {
       profile: { ...defaultProfile, ...parsed.profile },
+      fieldConfidence: { ...defaultFieldConfidence, ...parsed.fieldConfidence },
       calculators: {
         breakEven: { ...defaultCalculators.breakEven, ...parsed.calculators?.breakEven },
         pricing: { ...defaultCalculators.pricing, ...parsed.calculators?.pricing },
@@ -85,6 +91,8 @@ export function AppProvider({ children }) {
         ...(patch.years_in_operation !== undefined && patch.years_in_operation !== null ? { yearsInOperation: String(patch.years_in_operation) } : {}),
         ...(patch.challenges?.length ? { challenges: Array.from(new Set([...s.profile.challenges, ...patch.challenges])) } : {}),
       },
+      // Merge the agent's confidence map; newer turns can upgrade low -> high if the user clarified.
+      fieldConfidence: { ...s.fieldConfidence, ...(patch.field_confidence || {}) },
     }));
   }, []);
 

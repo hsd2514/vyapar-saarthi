@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from datetime import date
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +20,7 @@ from deterministic import (
     compute_viability_score,
     match_schemes,
 )
+from weather import get_weather_advisory
 
 app = FastAPI(title="Vyapar Saarthi API")
 
@@ -141,6 +145,34 @@ class SchemesRequest(BaseModel):
 @app.post("/api/schemes")
 def schemes(req: SchemesRequest):
     return {"schemes": match_schemes(req.monthly_revenue, req.years_in_operation, req.business_type)}
+
+
+# ---------------------------------------------------------------------------
+# Real-time weather advisory (Open-Meteo, free, no key, fully deterministic)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/weather-advisory")
+def weather_advisory(district: str, business_type: str):
+    """
+    Fetch a 3-day forecast from Open-Meteo for the given district and apply
+    the deterministic stocking-advice rule table in weather.py.
+
+    Returns raw forecast values alongside triggered rules so the UI can
+    show the exact numbers the advice is based on (auditable, like everything
+    else in this app). Returns {"available": false} gracefully if the network
+    call fails - the rest of the report still works.
+    """
+    if district not in CITY_DATA:
+        raise HTTPException(status_code=400, detail=f"Unknown district '{district}'")
+    coords = CITY_DATA[district].get("coords")
+    if not coords:
+        return {"available": False, "reason": f"No coordinates configured for district '{district}'."}
+    return get_weather_advisory(
+        lat=coords["lat"],
+        lon=coords["lon"],
+        district_label=CITY_DATA[district]["label"],
+        business_type=business_type,
+    )
 
 
 # ---------------------------------------------------------------------------

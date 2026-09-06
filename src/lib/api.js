@@ -42,4 +42,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+
+  weatherAdvisory: (district, businessType) =>
+    request(`/api/weather-advisory?district=${encodeURIComponent(district)}&business_type=${encodeURIComponent(businessType)}`),
 };
