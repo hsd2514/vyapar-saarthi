@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useAppState } from "../context/AppContext";
 import { api } from "../lib/api";
-import { BUSINESS_TYPE_LABELS } from "../data/constants";
-import { Card, PageHeader, SectionLabel, Field, TextInput, Select, NumberInput, Badge } from "../components/ui";
+import { BUSINESS_TYPE_LABELS, formatINR } from "../data/constants";
+import { Card, PageHeader, Field, TextInput, Select, NumberInput, Badge } from "../components/ui";
 import StepFooter from "../components/StepFooter";
 import VoiceAgent from "../components/VoiceAgent";
 
@@ -16,7 +16,9 @@ export default function Intake() {
     api.getCities().then((res) => setDistricts(res.districts)).catch(() => setDistricts([]));
   }, []);
 
-  const isValid = REQUIRED_FIELDS.every((f) => profile[f] !== "" && profile[f] !== undefined && profile[f] !== null);
+  const isValid =
+    REQUIRED_FIELDS.every((f) => profile[f] !== "" && profile[f] !== undefined && profile[f] !== null) &&
+    Number(profile.availableMarginCapital) > 0;
   const currentDistrict = districts.find((d) => d.key === profile.district);
   const projectCostPreview = profile.availableMarginCapital ? Number(profile.availableMarginCapital) / 0.1 : null;
 
@@ -24,23 +26,23 @@ export default function Intake() {
     <div>
       <PageHeader
         eyebrow="Step 1 of 5"
-        title="Tell Saarthi about your business, out loud"
-        description="Speak naturally - Saarthi asks one question at a time and fills the profile below as you go. You can correct anything by hand afterward."
+        title="Tell us about the business you want to start"
+        description="Talk to Saarthi like you would to a person. It will ask one thing at a time and fill in the answers here. You can also type or change anything yourself."
       />
 
       <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-6 items-stretch">
         <VoiceAgent onDone={() => markStepReached(1)} />
 
         <Card>
-          <div className="flex items-center justify-between mb-4">
-            <SectionLabel>Extracted profile</SectionLabel>
-            {intakeDone ? <Badge tone="pine">Intake complete</Badge> : <Badge tone="gold">In progress</Badge>}
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
+            <h2 className="font-display text-xl font-bold text-ink">Your answers</h2>
+            {intakeDone ? <Badge tone="good">All done</Badge> : <Badge tone="gold">Still asking</Badge>}
           </div>
 
-          <div className="space-y-4">
-            <Field label="Business category">
+          <div className="space-y-5">
+            <Field label="What kind of business?">
               <Select value={profile.businessType} onChange={(e) => updateProfile({ businessType: e.target.value })}>
-                <option value="">Not yet mentioned</option>
+                <option value="">Not answered yet</option>
                 {Object.entries(BUSINESS_TYPE_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
@@ -49,10 +51,10 @@ export default function Intake() {
               </Select>
             </Field>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid sm:grid-cols-2 gap-4">
               <Field label="District">
                 <Select value={profile.district} onChange={(e) => updateProfile({ district: e.target.value, block: "" })}>
-                  <option value="">Not yet mentioned</option>
+                  <option value="">Not answered yet</option>
                   {districts.map((d) => (
                     <option key={d.key} value={d.key}>
                       {d.label}
@@ -60,9 +62,9 @@ export default function Intake() {
                   ))}
                 </Select>
               </Field>
-              <Field label="Block">
+              <Field label="Block (taluka)">
                 <Select value={profile.block} onChange={(e) => updateProfile({ block: e.target.value })} disabled={!currentDistrict}>
-                  <option value="">Not yet mentioned</option>
+                  <option value="">Not answered yet</option>
                   {(currentDistrict?.blocks || []).map((b) => (
                     <option key={b} value={b}>
                       {b}
@@ -72,28 +74,29 @@ export default function Intake() {
               </Field>
             </div>
 
-            <Field label="Village" hint="Optional">
+            <Field label="Village name" hint="You can leave this empty">
               <TextInput value={profile.village} onChange={(e) => updateProfile({ village: e.target.value })} placeholder="e.g. Ambulga" />
             </Field>
 
-            <Field label="Available margin capital" hint="The cash you already have saved to contribute as your own 10% share">
-              <NumberInput prefix="Rs" value={profile.availableMarginCapital} onChange={(e) => updateProfile({ availableMarginCapital: e.target.value })} placeholder="e.g. 100000" />
+            <Field label="Money you already have saved" hint="Your own money that you can put into the business. The scheme lends the rest.">
+              <NumberInput prefix="₹" min="1" value={profile.availableMarginCapital} onChange={(e) => updateProfile({ availableMarginCapital: e.target.value })} placeholder="1,00,000" />
             </Field>
           </div>
 
-          {projectCostPreview && (
-            <div className="mt-4 rounded-lg border border-pine/25 bg-pine-tint/40 px-3.5 py-2.5 text-sm text-ink-soft">
-              At 10% margin, this implies a project cost of roughly <b className="text-ink num">Rs {Math.round(projectCostPreview).toLocaleString("en-IN")}</b> - the next step works out the exact loan and scheme.
+          {projectCostPreview > 0 && (
+            <div className="mt-5 rounded-xl border-2 border-pine/25 bg-pine-tint px-4 py-3.5 text-[16px] text-ink-soft leading-relaxed">
+              With this much of your own money, you could start a business worth about{" "}
+              <b className="figure text-ink text-[19px]">{formatINR(projectCostPreview)}</b>. We work out the exact loan next.
             </div>
           )}
 
           {currentDistrict && (
-            <p className="mt-4 text-xs text-ink-faint border-t border-line pt-3">{currentDistrict.note}</p>
+            <p className="mt-5 text-[15px] text-ink-soft border-t border-line pt-4 leading-relaxed">{currentDistrict.note}</p>
           )}
         </Card>
       </div>
 
-      <StepFooter nextTo="/feasibility" nextDisabled={!isValid} nextLabel="Continue to feasibility report" />
+      <StepFooter nextTo="/feasibility" nextDisabled={!isValid} nextLabel="See if it will work here" />
     </div>
   );
 }

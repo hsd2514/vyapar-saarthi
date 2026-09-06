@@ -106,6 +106,16 @@ RELEVANT_CONSUMER_SHARE = {
     "vendor": 0.55, "dairy": 0.35, "textiles": 0.20, "retail": 0.60, "handicrafts": 0.08, "food_stall": 0.25,
 }
 
+# Roughly how many addressable consumers a single business of this category
+# can typically serve before the market reads as "saturated" for it - used
+# as the benchmark for the Opportunity Analysis signal. This must scale
+# with RELEVANT_CONSUMER_SHARE (a low-share category like handicrafts needs
+# a much lower benchmark than a high-share category like retail), otherwise
+# every block reads as under-served regardless of the real competitor count.
+EXPECTED_CONSUMERS_PER_COMPETITOR = {
+    "vendor": 13000, "dairy": 15000, "textiles": 12000, "retail": 13000, "handicrafts": 8000, "food_stall": 8000,
+}
+
 DISTRIBUTION_CHANNELS = {
     "vendor": ["Weekly haat / local mandi stall", "Roadside pushcart", "Standing WhatsApp order groups"],
     "dairy": ["Doorstep delivery route", "Local dairy cooperative pooling point", "Sweet shops and tea stalls as bulk buyers"],

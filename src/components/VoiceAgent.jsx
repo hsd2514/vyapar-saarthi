@@ -107,13 +107,13 @@ export default function VoiceAgent({ onDone }) {
         {conversation.length === 0 && !thinking && (
           <div className="h-full flex flex-col items-center justify-center text-center gap-2 text-ink-faint py-10">
             <MicIcon className="opacity-40 h-8 w-8" />
-            <p className="text-sm">Saarthi will greet you here in a moment.</p>
+            <p className="text-[17px]">Saarthi will say hello in a moment.</p>
           </div>
         )}
         {conversation.map((entry, i) => (
           <div key={i} className={`flex ${entry.role === "agent" ? "justify-start" : "justify-end"}`}>
             <div
-              className={`max-w-[85%] rounded-xl px-4 py-2.5 text-sm leading-relaxed ${
+              className={`max-w-[88%] rounded-2xl px-4 py-3 text-[17px] leading-relaxed ${
                 entry.role === "agent" ? "bg-pine-tint text-ink border border-pine/20" : "bg-paper-dim text-ink border border-line"
               }`}
             >
@@ -123,7 +123,7 @@ export default function VoiceAgent({ onDone }) {
         ))}
         {thinking && (
           <div className="flex justify-start">
-            <div className="rounded-xl px-4 py-2.5 text-sm bg-pine-tint border border-pine/20 flex items-center gap-2 text-ink-soft">
+            <div className="rounded-2xl px-4 py-3 text-[17px] bg-pine-tint border border-pine/20 flex items-center gap-2 text-ink-soft">
               <Spinner className="text-pine" /> Saarthi is thinking...
             </div>
           </div>
@@ -139,7 +139,7 @@ export default function VoiceAgent({ onDone }) {
           type="button"
           onClick={toggleListening}
           disabled={thinking}
-          className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-2 transition ${
+          className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 transition ${
             listening ? "border-clay bg-clay-tint text-clay animate-pulse" : "border-pine bg-pine-tint text-pine-dim hover:bg-pine/10"
           } disabled:opacity-50`}
           aria-label={listening ? "Stop listening" : "Start speaking"}
@@ -152,16 +152,16 @@ export default function VoiceAgent({ onDone }) {
             value={typedFallback}
             onChange={(e) => setTypedFallback(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submitTyped()}
-            placeholder={listening ? "Listening..." : "Or type your answer here"}
-            className="flex-1 rounded-lg border border-line-strong bg-paper px-3.5 py-2.5 text-sm outline-none focus:border-pine focus:ring-4 focus:ring-pine/10"
+            placeholder={listening ? "Listening to you..." : "Or type your answer"}
+            className="flex-1 rounded-xl border-2 border-line-strong bg-white px-4 py-3 text-[17px] outline-none focus:border-pine focus:ring-4 focus:ring-pine/15"
           />
           <Button variant="secondary" onClick={submitTyped} disabled={thinking}>
             Send
           </Button>
         </div>
       </div>
-      <p className="mt-3 text-xs text-ink-faint">
-        <Badge tone="neutral">Live conversation</Badge> Speak naturally - Saarthi asks one question at a time and only records what you actually say.
+      <p className="mt-3 text-[15px] text-ink-soft">
+        Press the button and speak. Saarthi asks one thing at a time, and only writes down what you actually say.
       </p>
     </div>
   );

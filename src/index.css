@@ -1,29 +1,36 @@
 @import "tailwindcss";
 
+/* Design constraint that overrides everything else here: the reader is a
+   first-time rural entrepreneur with low financial AND digital literacy,
+   often on a phone. So: large type, high contrast, generous touch targets,
+   plain words, and no monospace "code" styling on money they need to read. */
+
 @theme {
   --font-display: "Familjen Grotesk", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
-  /* Terracotta + slate: a warm rust accent on a cool neutral base -
-     deliberately not the cream/brass/espresso combination. */
   --color-paper: #f4f5f7;
   --color-paper-dim: #eceef2;
-  --color-ink: #171a1f;
-  --color-ink-soft: #565e6b;
-  --color-ink-faint: #8c93a0;
-  --color-line: #dde1e7;
-  --color-line-strong: #c1c8d1;
+  --color-ink: #14171c;
+  --color-ink-soft: #4a5361;
+  --color-ink-faint: #737c8a;
+  --color-line: #d8dde4;
+  --color-line-strong: #b6bec9;
 
-  --color-pine: #c1440e;
-  --color-pine-dim: #a2380b;
-  --color-pine-tint: rgba(193, 68, 14, 0.08);
+  --color-pine: #b83d0b;
+  --color-pine-dim: #94310a;
+  --color-pine-tint: #fdf0ea;
 
-  --color-gold: #a8710a;
-  --color-gold-tint: rgba(168, 113, 10, 0.1);
+  --color-good: #147052;
+  --color-good-dim: #0d5540;
+  --color-good-tint: #e8f4f0;
 
-  --color-clay: #b02e3c;
-  --color-clay-tint: rgba(176, 46, 60, 0.09);
+  --color-gold: #97650a;
+  --color-gold-tint: #fdf2de;
+
+  --color-clay: #a52836;
+  --color-clay-tint: #fceceE;
 }
 
 @layer base {
@@ -37,11 +44,22 @@
     color: var(--color-ink);
     background: var(--color-paper);
     min-height: 100vh;
+    /* Base body text steps up from 14px to 17px - the single biggest
+       accessibility win for this audience. */
+    font-size: 17px;
+    line-height: 1.6;
   }
 
   ::selection {
     background: var(--color-pine-tint);
     color: var(--color-ink);
+  }
+
+  /* Everything clickable is at least a comfortable thumb target. */
+  button,
+  select,
+  input {
+    font-size: inherit;
   }
 }
 
@@ -56,17 +74,54 @@
   .paper-card {
     background: #ffffff;
     border: 1px solid var(--color-line);
-    box-shadow: 0 1px 0 rgba(23, 26, 31, 0.02), 0 8px 20px -16px rgba(23, 26, 31, 0.18);
+    box-shadow: 0 1px 0 rgba(20, 23, 28, 0.02), 0 8px 20px -16px rgba(20, 23, 28, 0.2);
   }
 
-  .num {
-    font-family: var(--font-mono);
+  /* Money and counts the user reads. Deliberately the display face, not
+     monospace - tabular figures without looking like a terminal. */
+  .figure {
+    font-family: var(--font-display);
     font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
   }
 
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: var(--color-line-strong) transparent;
+  }
+
+  .hatch-loan {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      var(--color-pine) 0 7px,
+      color-mix(in srgb, var(--color-pine) 68%, white) 7px 14px
+    );
+  }
+
+  .rise-in {
+    animation: rise-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    animation-delay: var(--rise-delay, 0ms);
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise-in {
+    animation: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
   }
 }
 
@@ -82,5 +137,8 @@
     background: white !important;
     box-shadow: none !important;
     border-color: #ccc !important;
+  }
+  .rise-in {
+    animation: none !important;
   }
 }

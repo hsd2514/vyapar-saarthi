@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8001";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8003";
 
 async function request(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -53,6 +53,12 @@ export const api = {
     request("/api/feasibility-report", {
       method: "POST",
       body: JSON.stringify({ district, block, business_type: businessType }),
+    }),
+
+  feasibilityChat: (message, history, district, block, businessType) =>
+    request("/api/feasibility-agent/chat", {
+      method: "POST",
+      body: JSON.stringify({ message, history, district, block, business_type: businessType }),
     }),
 
   advisory: (payload) =>

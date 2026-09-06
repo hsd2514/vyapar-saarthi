@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useAppState } from "../context/AppContext";
 import { api } from "../lib/api";
 import { formatINR } from "../data/constants";
-import { Card, PageHeader, SectionLabel, StatRow, Badge, Spinner } from "../components/ui";
+import { Card, PageHeader, Section, TileGrid, FigureTile, Badge, Spinner } from "../components/ui";
+import FinancingSplitBar from "../components/FinancingSplitBar";
 import StepFooter from "../components/StepFooter";
 
 export default function FinancialPlan() {
@@ -26,75 +27,78 @@ export default function FinancialPlan() {
   if (!profile.availableMarginCapital) {
     return (
       <Card className="max-w-3xl text-center py-14">
-        <p className="text-ink-soft mb-4">Complete voice intake first to work out your financial structuring.</p>
+        <p className="text-[17px] text-ink-soft mb-5">Please answer the first few questions before we can work out your loan.</p>
         <button onClick={() => navigate("/intake")} className="text-pine-dim font-semibold underline underline-offset-4">
-          Go to Voice Intake
+          Go back to the first step
         </button>
       </Card>
     );
   }
 
+  const scheme = structuring?.scheme;
+
   return (
     <div className="max-w-3xl">
       <PageHeader
         eyebrow="Step 3 of 5"
-        title="Financial structuring & scheme router"
-        description="Your margin capital determines your project cost, your maximum loan, and which of the two scheme tiers you qualify for - all plain arithmetic, no guessing."
+        title="How much money you can get"
+        description="For every ₹10 the business needs, you put in ₹1 and the government scheme lends the other ₹9. How big your business is decides which scheme you get."
       />
 
       {loading && (
         <Card className="flex items-center gap-3 py-10 justify-center text-ink-soft">
-          <Spinner className="text-pine" /> Working out your project cost and eligible scheme...
+          <Spinner className="text-pine" /> Working out your loan...
         </Card>
       )}
 
-      {error && <Card className="border-clay/30 bg-clay-tint text-[#7a1f28] text-sm mb-6">Could not reach the backend: {error}</Card>}
+      {error && <Card className="border-clay/30 bg-clay-tint text-clay text-[17px] mb-6">Sorry, we could not load this right now. Please check your internet and try again.</Card>}
 
       {structuring && (
-        <div className="space-y-6">
-          <Card>
-            <SectionLabel>Financial structuring</SectionLabel>
-            <p className="font-mono text-xs text-ink-faint mb-3">Project cost = Margin capital / 10%. Max loan = Project cost x 90% (capped per scheme).</p>
-            <StatRow label="Available margin capital (your 10%)" value={formatINR(structuring.margin_capital)} />
-            <StatRow label="Implied project cost" value={formatINR(structuring.project_cost)} />
-            <StatRow label="Maximum loan eligibility (90%)" value={structuring.max_loan_amount !== null ? formatINR(structuring.max_loan_amount) : "-"} />
+        <div className="space-y-8">
+          {/* The one result this screen exists to deliver. */}
+          <Card className="rise-in">
+            <FinancingSplitBar
+              marginCapital={structuring.margin_capital}
+              loanAmount={structuring.max_loan_amount || 0}
+              projectCost={structuring.project_cost}
+            />
+            <p className="mt-5 pt-5 border-t border-line text-[15px] text-ink-soft leading-relaxed">
+              How this is worked out: your savings are one tenth of the total. The loan is the other nine tenths, up to the scheme's limit.
+            </p>
           </Card>
 
-          <Card>
-            <SectionLabel>Scheme auto-selection</SectionLabel>
-            <div className="rounded-lg border border-line bg-paper-dim/50 p-3.5 mb-4">
-              <p className="text-xs font-mono uppercase tracking-wide text-ink-faint mb-1">Routing rule applied</p>
-              <p className="text-sm leading-relaxed">{structuring.rule_text}</p>
-            </div>
-
-            {structuring.scheme ? (
-              <div className="rounded-xl border border-pine/30 bg-pine-tint/30 p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-display text-lg font-semibold">{structuring.scheme.name}</h3>
-                  <Badge tone="pine">Selected</Badge>
-                </div>
-                <div className="grid sm:grid-cols-2 gap-3">
-                  <StatRow label="Interest rate" value={`${structuring.scheme.annual_rate_pct}% p.a.`} mono={false} />
-                  <StatRow label="Tenure" value={`${structuring.scheme.tenure_months} months`} />
-                  <StatRow label="Moratorium" value={`${structuring.scheme.moratorium_months} months`} />
-                  <StatRow label="Loan cap for this tier" value={formatINR(structuring.scheme.loan_cap)} />
-                </div>
+          <Section
+            title="The scheme you qualify for"
+            aside={scheme ? <Badge tone="good">You qualify</Badge> : <Badge tone="clay">Nothing matches</Badge>}
+            className="rise-in"
+            style={{ "--rise-delay": "80ms" }}
+          >
+            {scheme ? (
+              <>
+                <h3 className="font-display text-2xl font-bold mb-2">{scheme.name}</h3>
+                <p className="text-[17px] text-ink-soft mb-5 leading-relaxed">{structuring.rule_text}</p>
+                <TileGrid min="200px">
+                  <FigureTile label="Interest charged" value={`${scheme.annual_rate_pct}%`} note="a year, lower than a normal bank loan" />
+                  <FigureTile label="Time to pay it back" value={`${scheme.tenure_months / 12} years`} note={`${scheme.tenure_months} months in total`} />
+                  <FigureTile label="Free period at the start" value={`${scheme.moratorium_months} months`} note="you pay nothing during this time" tone="gold" />
+                </TileGrid>
                 {structuring.loan_capped && (
-                  <p className="mt-3 text-sm text-gold">
-                    Your 90% loan share exceeds this tier's cap of {formatINR(structuring.scheme.loan_cap)} - your loan eligibility has been capped accordingly.
+                  <p className="mt-5 rounded-xl border-2 border-gold/35 bg-gold-tint px-4 py-3.5 text-[16px] text-ink leading-relaxed">
+                    This scheme will not lend more than {formatINR(scheme.loan_cap)}. So you would need to arrange the rest yourself, shown in grey above.
                   </p>
                 )}
-              </div>
+              </>
             ) : (
-              <div className="rounded-xl border border-clay/30 bg-clay-tint/40 p-4 text-sm text-[#7a1f28]">
-                No scheme tier matches this project cost. Consider a smaller initial project scope, or a different funding route outside this tool's scope.
+              <div className="rounded-xl border-2 border-clay/30 bg-clay-tint p-5 text-[17px] text-ink leading-relaxed">
+                <p className="mb-2">{structuring.rule_text}</p>
+                <p>Try starting with a smaller business, or ask your bank about other loans.</p>
               </div>
             )}
-          </Card>
+          </Section>
         </div>
       )}
 
-      <StepFooter backTo="/feasibility" nextTo="/repayment-plan" nextDisabled={!structuring?.scheme} onNext={() => markStepReached(3)} />
+      <StepFooter backTo="/feasibility" nextTo="/repayment-plan" nextDisabled={!scheme} onNext={() => markStepReached(3)} />
     </div>
   );
 }

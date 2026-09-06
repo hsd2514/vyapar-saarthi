@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from pydantic_ai import ModelMessagesTypeAdapter
 from pydantic_ai.messages import ModelMessage
 
-from agent import ConversationTurn, ProfilePatch, get_advisory_agent, get_feasibility_agent, get_intake_agent
+from agent import ConversationTurn, ProfilePatch, get_advisory_agent, get_feasibility_advisor_agent, get_intake_agent
 from city_data import BUSINESS_TYPES, CITY_DATA
 from deterministic import (
     calc_financial_structuring,
@@ -138,19 +138,40 @@ def feasibility_report(req: FeasibilityRequest):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/api/feasibility-narrative")
-async def feasibility_narrative(req: FeasibilityRequest):
-    report = generate_feasibility_report(req.district, req.block, req.business_type)
+class FeasibilityChatRequest(BaseModel):
+    message: str
+    history: list[dict] = []  # raw pydantic-ai message dicts round-tripped from the client - this IS the agent's memory
+    district: str
+    block: str
+    business_type: str
+
+
+class FeasibilityChatResponse(BaseModel):
+    reply_text: str
+    history: list[dict]
+
+
+@app.post("/api/feasibility-agent/chat", response_model=FeasibilityChatResponse)
+async def feasibility_agent_chat(req: FeasibilityChatRequest):
+    """A real tool-using, memory-carrying conversation with the feasibility
+    advisor. The agent calls into deterministic.py's section functions
+    itself (see agent.py's get_feasibility_advisor_agent) rather than being
+    handed a pre-baked report - so it can answer follow-up and 'what if'
+    questions by actually calling those functions again with new
+    parameters, never by guessing."""
     try:
-        prompt = (
-            f"Opportunity analysis facts: {report['opportunity_analysis']}\n"
-            f"SWOT facts: {report['swot']}\n"
-            f"Pricing facts: {report['product_market_value']}"
+        message_history: list[ModelMessage] = (
+            ModelMessagesTypeAdapter.validate_python(req.history) if req.history else []
         )
-        result = await get_feasibility_agent().run(prompt)
-        return result.output
-    except Exception as exc:  # pragma: no cover
-        raise HTTPException(status_code=502, detail=f"Feasibility narration failed: {exc}") from exc
+        prompt = (
+            f"Entrepreneur's actual profile: district={req.district}, block={req.block}, business_type={req.business_type}\n"
+            f"Entrepreneur says: {req.message}"
+        )
+        result = await get_feasibility_advisor_agent().run(prompt, message_history=message_history)
+        new_history = ModelMessagesTypeAdapter.dump_python(result.all_messages(), mode="json")
+        return FeasibilityChatResponse(reply_text=result.output, history=new_history)
+    except Exception as exc:  # pragma: no cover - surfaced to the UI as a toast
+        raise HTTPException(status_code=502, detail=f"Feasibility advisor call failed: {exc}") from exc
 
 
 # ---------------------------------------------------------------------------

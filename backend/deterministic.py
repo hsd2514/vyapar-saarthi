@@ -10,6 +10,7 @@ from city_data import (
     CITY_DATA,
     COMPETITION_DENSITY_MAX,
     DISTRIBUTION_CHANNELS,
+    EXPECTED_CONSUMERS_PER_COMPETITOR,
     RELEVANT_CONSUMER_SHARE,
     THREAT_TEMPLATES,
     get_block,
@@ -52,20 +53,20 @@ def calc_financial_structuring(available_margin_capital: float) -> dict:
     if project_cost <= MICRO_FINANCE_SCHEME["project_cost_max"]:
         scheme = MICRO_FINANCE_SCHEME
         rule_text = (
-            f"Project cost is Rs {project_cost:,.0f}, at or below the Rs 1,40,000 ceiling "
-            f"for the Micro Finance Scheme."
+            "Your business costs under 1.4 lakh rupees to start, so it comes under the "
+            "Micro Finance Scheme, which is meant for small businesses like yours."
         )
     elif project_cost <= TERM_LOAN_SCHEME["project_cost_max"]:
         scheme = TERM_LOAN_SCHEME
         rule_text = (
-            f"Project cost is Rs {project_cost:,.0f}, above Rs 1,40,000 and at or below "
-            f"Rs 50,00,000, qualifying for the Term Loan Scheme."
+            "Your business costs more than 1.4 lakh rupees to start, so it comes under the "
+            "Term Loan Scheme, which is for bigger businesses and gives you more time to repay."
         )
     else:
         scheme = None
         rule_text = (
-            f"Project cost is Rs {project_cost:,.0f}, above the Rs 50,00,000 ceiling this "
-            f"router supports - no scheme tier matches at this margin capital."
+            "Your business would cost over 50 lakh rupees to start. That is more than these "
+            "two schemes can lend."
         )
 
     if scheme is None:
@@ -153,7 +154,7 @@ def calc_repayment_schedule(principal: float, annual_rate_pct: float, tenure_mon
         "total_repayment": total_repayment,
         "total_interest": total_interest,
         "quarters": quarters,
-        "assumption": "No payment is due during the moratorium and interest is not capitalised during it - EMI is computed on the original principal over the remaining tenure once repayment begins.",
+        "assumption": "How we worked this out: you pay nothing during the free period at the start, and no interest is added during it either. The monthly amount is then spread evenly over the months that are left.",
     }
 
 
@@ -178,23 +179,31 @@ def calc_working_capital_by_phase(monthly_operational_cost: float, inventory_day
 
 # ---------------------------------------------------------------------------
 # Module 1: Hyper-Local Business Feasibility Report (6 named sections).
+#
+# Each section is its own standalone function, callable independently - this
+# is deliberate: the feasibility agent (agent.py) wires each of these up as
+# a tool it can call with whatever (district, block, business_type) it
+# needs, including combinations the entrepreneur didn't originally pick, so
+# it can answer "what if" and "which business suits me best here" questions
+# by actually calling these functions again rather than guessing an answer.
 # ---------------------------------------------------------------------------
 
-def generate_feasibility_report(district_key: str, block_name: str, business_type: str) -> dict:
-    district = CITY_DATA[district_key]
+def _resolve(district_key: str, block_name: str, business_type: str):
+    district = CITY_DATA.get(district_key)
+    if not district:
+        raise ValueError(f"Unknown district '{district_key}'. Valid districts: {list(CITY_DATA.keys())}")
     block = get_block(district_key, block_name)
     if not block:
-        raise ValueError(f"Unknown block '{block_name}' in district '{district_key}'")
+        raise ValueError(f"Unknown block '{block_name}' in district '{district_key}'. Valid blocks: {list(district['blocks'].keys())}")
+    return district, block
 
+
+def get_market_reach(district_key: str, block_name: str, business_type: str) -> dict:
+    district, block = _resolve(district_key, block_name, business_type)
     population = block["population"]
-    density = block["competition_density"].get(business_type, 10)
-    commodity = district["commodities"].get(business_type)
-    seasonal_peak = district["seasonal_peak"].get(business_type, "N/A")
     consumer_share = RELEVANT_CONSUMER_SHARE.get(business_type, 0.2)
-
-    # 1. Market Reach
     addressable_consumers = round(population * consumer_share)
-    market_reach = {
+    return {
         "block_population": population,
         "relevant_consumer_share": consumer_share,
         "addressable_consumers": addressable_consumers,
@@ -202,69 +211,90 @@ def generate_feasibility_report(district_key: str, block_name: str, business_typ
         "detail": f"Within a 5-10km reach of {block_name}, an estimated {addressable_consumers:,} of the block's {population:,} residents are plausible regular customers for this category ({consumer_share * 100:.0f}% relevance share).",
     }
 
-    # 5. Competitor Mapping (numbered per PS order, computed before 2/3/4 since they reference it)
+
+def get_competitor_mapping(district_key: str, block_name: str, business_type: str) -> dict:
+    district, block = _resolve(district_key, block_name, business_type)
+    density = block["competition_density"].get(business_type, 10)
+    addressable_consumers = get_market_reach(district_key, block_name, business_type)["addressable_consumers"]
     consumers_per_competitor = addressable_consumers / density if density > 0 else addressable_consumers
-    competitor_mapping = {
+    return {
         "competitor_count": density,
         "scale_ceiling": COMPETITION_DENSITY_MAX,
         "addressable_consumers_per_competitor": round(consumers_per_competitor),
         "detail": f"{density} similar businesses are observed in {block_name} (scale ceiling {COMPETITION_DENSITY_MAX}), roughly {round(consumers_per_competitor):,} addressable consumers per existing competitor.",
     }
 
-    # 2. Opportunity Analysis
-    is_underserved = consumers_per_competitor > 3000
-    opportunity = {
+
+def get_opportunity_analysis(district_key: str, block_name: str, business_type: str) -> dict:
+    mapping = get_competitor_mapping(district_key, block_name, business_type)
+    consumers_per_competitor = mapping["addressable_consumers_per_competitor"]
+    benchmark = EXPECTED_CONSUMERS_PER_COMPETITOR.get(business_type, 10000)
+    is_underserved = consumers_per_competitor > benchmark
+    return {
         "is_underserved": is_underserved,
+        "benchmark_consumers_per_competitor": benchmark,
         "detail": (
-            f"At roughly {round(consumers_per_competitor):,} addressable consumers per existing competitor, this block reads as under-served for this category."
+            f"At roughly {consumers_per_competitor:,} addressable consumers per existing competitor - above the ~{benchmark:,} this category typically supports per business - this block reads as under-served."
             if is_underserved
-            else f"At roughly {round(consumers_per_competitor):,} addressable consumers per existing competitor, this block already carries meaningful competition for this category - differentiation will matter more than raw demand."
+            else f"At roughly {consumers_per_competitor:,} addressable consumers per existing competitor - at or below the ~{benchmark:,} this category typically supports per business - this block already carries meaningful competition. Differentiation will matter more than raw demand."
         ),
     }
 
-    # 6. Product Market Value
-    pricing = None
-    if commodity:
-        spread_pct = (commodity["high"] - commodity["low"]) / commodity["low"] * 100
-        suggested_entry_price = commodity["low"] + (commodity["current"] - commodity["low"]) * 0.6
-        pricing = {
-            "unit": commodity["unit"],
-            "range_low": commodity["low"],
-            "range_high": commodity["high"],
-            "current": commodity["current"],
-            "range_spread_pct": spread_pct,
-            "suggested_entry_price": suggested_entry_price,
-            "detail": f"Local price for {commodity['unit']} currently runs Rs {commodity['low']}-Rs {commodity['high']}, at Rs {commodity['current']} today. A new entrant pricing near Rs {suggested_entry_price:.0f} sits below the current rate to build initial footfall without matching the low end, where existing sellers already compete on price alone.",
-        }
 
-    # 3. SWOT
-    swot = {
+def get_product_market_value(district_key: str, block_name: str, business_type: str) -> dict | None:
+    district, _block = _resolve(district_key, block_name, business_type)
+    commodity = district["commodities"].get(business_type)
+    if not commodity:
+        return None
+    spread_pct = (commodity["high"] - commodity["low"]) / commodity["low"] * 100
+    suggested_entry_price = commodity["low"] + (commodity["current"] - commodity["low"]) * 0.6
+    return {
+        "unit": commodity["unit"],
+        "range_low": commodity["low"],
+        "range_high": commodity["high"],
+        "current": commodity["current"],
+        "range_spread_pct": spread_pct,
+        "suggested_entry_price": suggested_entry_price,
+        "detail": f"Local price for {commodity['unit']} currently runs Rs {commodity['low']}-Rs {commodity['high']}, at Rs {commodity['current']} today. A new entrant pricing near Rs {suggested_entry_price:.0f} sits below the current rate to build initial footfall without matching the low end, where existing sellers already compete on price alone.",
+    }
+
+
+def get_threats(district_key: str, block_name: str, business_type: str) -> dict:
+    district, _block = _resolve(district_key, block_name, business_type)
+    return {
+        "items": THREAT_TEMPLATES.get(business_type, []),
+        "seasonal_peak": district["seasonal_peak"].get(business_type, "N/A"),
+    }
+
+
+def get_swot(district_key: str, block_name: str, business_type: str) -> dict:
+    market_reach = get_market_reach(district_key, block_name, business_type)
+    opportunity = get_opportunity_analysis(district_key, block_name, business_type)
+    threats = get_threats(district_key, block_name, business_type)
+    return {
         "strengths": [
-            f"Established local demand: {addressable_consumers:,} addressable consumers within reach",
-            f"Peak-season demand window identified ({seasonal_peak}) to plan stock and cash around",
+            f"Established local demand: {market_reach['addressable_consumers']:,} addressable consumers within reach",
+            f"Peak-season demand window identified ({threats['seasonal_peak']}) to plan stock and cash around",
         ],
         "weaknesses": [
             "First-time enterprise with no operating track record for lenders to reference",
             "Working capital is likely to be the binding constraint before revenue stabilises",
         ],
         "opportunities": [opportunity["detail"]],
-        "threats": THREAT_TEMPLATES.get(business_type, []),
+        "threats": threats["items"],
     }
 
-    # 4. Threats Identification (surfaced again standalone per the PS's explicit numbered list)
-    threats = {
-        "items": THREAT_TEMPLATES.get(business_type, []),
-        "seasonal_peak": seasonal_peak,
-    }
 
+def generate_feasibility_report(district_key: str, block_name: str, business_type: str) -> dict:
+    district, _block = _resolve(district_key, block_name, business_type)
     return {
         "district": district["label"],
         "block": block_name,
         "business_type": business_type,
-        "market_reach": market_reach,
-        "opportunity_analysis": opportunity,
-        "swot": swot,
-        "threats": threats,
-        "competitor_mapping": competitor_mapping,
-        "product_market_value": pricing,
+        "market_reach": get_market_reach(district_key, block_name, business_type),
+        "opportunity_analysis": get_opportunity_analysis(district_key, block_name, business_type),
+        "swot": get_swot(district_key, block_name, business_type),
+        "threats": get_threats(district_key, block_name, business_type),
+        "competitor_mapping": get_competitor_mapping(district_key, block_name, business_type),
+        "product_market_value": get_product_market_value(district_key, block_name, business_type),
     }

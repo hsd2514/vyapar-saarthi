@@ -22,10 +22,12 @@ const defaultOperations = {
 const initialState = {
   profile: defaultProfile,
   operations: defaultOperations,
-  conversation: [], // [{ role: "agent" | "user", text: string }]
-  agentHistory: [], // raw pydantic-ai message history, round-tripped to the backend
+  conversation: [], // [{ role: "agent" | "user", text: string }] - voice intake transcript
+  agentHistory: [], // raw pydantic-ai message history for the intake agent - its memory
   intakeDone: false,
   furthestStep: 0,
+  feasibilityChat: [], // [{ role: "agent" | "user", text: string }] - feasibility advisor transcript
+  feasibilityChatHistory: [], // raw pydantic-ai message history for the feasibility advisor - its memory
 };
 
 function loadInitial() {
@@ -40,6 +42,8 @@ function loadInitial() {
       agentHistory: parsed.agentHistory || [],
       intakeDone: parsed.intakeDone || false,
       furthestStep: parsed.furthestStep || 0,
+      feasibilityChat: parsed.feasibilityChat || [],
+      feasibilityChatHistory: parsed.feasibilityChatHistory || [],
     };
   } catch {
     return initialState;
@@ -95,6 +99,14 @@ export function AppProvider({ children }) {
     setState((s) => ({ ...s, furthestStep: Math.max(s.furthestStep, step) }));
   }, []);
 
+  const pushFeasibilityChat = useCallback((entry) => {
+    setState((s) => ({ ...s, feasibilityChat: [...s.feasibilityChat, entry] }));
+  }, []);
+
+  const setFeasibilityChatHistory = useCallback((history) => {
+    setState((s) => ({ ...s, feasibilityChatHistory: history }));
+  }, []);
+
   const resetAll = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
     setState(initialState);
@@ -111,6 +123,8 @@ export function AppProvider({ children }) {
         applyProfilePatch,
         setIntakeDone,
         markStepReached,
+        pushFeasibilityChat,
+        setFeasibilityChatHistory,
         resetAll,
       }}
     >

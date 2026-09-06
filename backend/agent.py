@@ -135,3 +135,107 @@ def get_feasibility_agent() -> Agent:
     if _feasibility_agent is None:
         _feasibility_agent = Agent(AGENT_MODEL, output_type=FeasibilityNarrative, system_prompt=FEASIBILITY_SYSTEM_PROMPT)
     return _feasibility_agent
+
+
+# ---------------------------------------------------------------------------
+# Feasibility Advisor - a real tool-using agent with conversation memory.
+#
+# Unlike the narration agent above (one input -> one narrated output), this
+# agent can hold a back-and-forth conversation and, critically, can CALL the
+# same deterministic functions the Feasibility Report screen displays -
+# for the entrepreneur's actual (district, block, business_type), or for any
+# other valid combination it needs to answer a "what if I picked a different
+# block" or "which of these businesses suits me best here" question. It
+# never invents a number: every figure it states must come from a tool call
+# response, not from its own reasoning.
+# ---------------------------------------------------------------------------
+
+FEASIBILITY_ADVISOR_SYSTEM_PROMPT = """You are Saarthi, an expert hyper-local business
+feasibility advisor for a rural or semi-urban Indian entrepreneur. You are having an ongoing,
+remembered conversation - you can refer back to anything discussed earlier in this session.
+
+You have tools to fetch REAL, already-computed deterministic data for any (district, block,
+business_type) combination the three serviced districts support: latur, sitapur, indore.
+Serviced blocks: Latur has Latur, Ausa, Nilanga, Renapur, Chakur. Sitapur has Biswan,
+Mahmoodabad, Sidhauli, Laharpur, Machhrehta. Indore has Sanwer, Depalpur, Mhow, Hatod, Rau.
+Business categories: vendor, dairy, textiles, retail, handicrafts, food_stall.
+
+Hard rules:
+- ALWAYS call the relevant tool(s) before stating any number, name, or fact about market reach,
+  competitors, pricing, SWOT, threats, or the loan/scheme math. Never state a figure from memory
+  or estimation - call the tool, even if you already called it earlier this conversation and
+  think you remember the answer, unless the user is asking about the exact same combination you
+  just fetched.
+- If the user asks a "what if" question (a different block, a different business category, or a
+  different margin capital), call the tools again with those new parameters and compare the
+  result to what you already know about their actual profile - be explicit that this is a
+  hypothetical comparison, not their real filing.
+- If the user asks something outside what the tools can answer, say so plainly rather than
+  guessing.
+- Keep answers concise and grounded - cite the actual number or fact from the tool result."""
+
+_feasibility_advisor_agent: Agent | None = None
+
+
+def get_feasibility_advisor_agent() -> Agent:
+    global _feasibility_advisor_agent
+    if _feasibility_advisor_agent is not None:
+        return _feasibility_advisor_agent
+
+    # Imported here (not at module load) so this file has no hard dependency
+    # on deterministic.py until the advisor is actually used.
+    from deterministic import (
+        calc_financial_structuring,
+        get_competitor_mapping,
+        get_market_reach,
+        get_opportunity_analysis,
+        get_product_market_value,
+        get_swot,
+        get_threats,
+    )
+
+    advisor = Agent(AGENT_MODEL, system_prompt=FEASIBILITY_ADVISOR_SYSTEM_PROMPT)
+
+    def _safe(fn, *args):
+        try:
+            return fn(*args)
+        except ValueError as exc:
+            return {"error": str(exc)}
+
+    @advisor.tool_plain
+    def market_reach(district: str, block: str, business_type: str) -> dict:
+        """Real market reach numbers (addressable consumers within 5-10km, distribution channels) for this district/block/business category."""
+        return _safe(get_market_reach, district, block, business_type)
+
+    @advisor.tool_plain
+    def competitor_mapping(district: str, block: str, business_type: str) -> dict:
+        """Real competitor density and consumers-per-competitor for this district/block/business category."""
+        return _safe(get_competitor_mapping, district, block, business_type)
+
+    @advisor.tool_plain
+    def opportunity_analysis(district: str, block: str, business_type: str) -> dict:
+        """Whether this district/block/business category reads as under-served or competitive, with the reasoning."""
+        return _safe(get_opportunity_analysis, district, block, business_type)
+
+    @advisor.tool_plain
+    def swot_analysis(district: str, block: str, business_type: str) -> dict:
+        """Strengths/weaknesses/opportunities/threats lists for this district/block/business category."""
+        return _safe(get_swot, district, block, business_type)
+
+    @advisor.tool_plain
+    def threats(district: str, block: str, business_type: str) -> dict:
+        """Named threat categories and the nearest seasonal demand peak for this district/block/business category."""
+        return _safe(get_threats, district, block, business_type)
+
+    @advisor.tool_plain
+    def product_market_value(district: str, block: str, business_type: str) -> dict | None:
+        """Local price range, current price, and suggested entry price for this district/block/business category."""
+        return _safe(get_product_market_value, district, block, business_type)
+
+    @advisor.tool_plain
+    def financial_structuring(available_margin_capital: float) -> dict:
+        """Project cost, max loan amount, and which scheme tier (Micro Finance or Term Loan) this margin capital qualifies for."""
+        return _safe(calc_financial_structuring, available_margin_capital)
+
+    _feasibility_advisor_agent = advisor
+    return _feasibility_advisor_agent
