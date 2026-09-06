@@ -1,31 +1,29 @@
 @import "tailwindcss";
 
 @theme {
-  --font-display: "Instrument Sans", "Public Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Familjen Grotesk", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
-  /* light, cool-neutral base - not warm paper/cream */
-  --color-paper: #f7f8fa;
-  --color-paper-dim: #eef0f3;
-  --color-ink: #10151c;
-  --color-ink-soft: #4c5563;
-  --color-ink-faint: #8891a0;
-  --color-line: #e2e6eb;
-  --color-line-strong: #c7cfd8;
+  /* Terracotta + slate: a warm rust accent on a cool neutral base -
+     deliberately not the cream/brass/espresso combination. */
+  --color-paper: #f4f5f7;
+  --color-paper-dim: #eceef2;
+  --color-ink: #171a1f;
+  --color-ink-soft: #565e6b;
+  --color-ink-faint: #8c93a0;
+  --color-line: #dde1e7;
+  --color-line-strong: #c1c8d1;
 
-  /* terminal-green accent, tuned for contrast on white */
-  --color-pine: #0fa968;
-  --color-pine-dim: #0b8552;
-  --color-pine-tint: rgba(15, 169, 104, 0.09);
+  --color-pine: #c1440e;
+  --color-pine-dim: #a2380b;
+  --color-pine-tint: rgba(193, 68, 14, 0.08);
 
-  /* amber, used for suggested/attention states */
-  --color-gold: #c2760a;
-  --color-gold-tint: rgba(194, 118, 10, 0.09);
+  --color-gold: #a8710a;
+  --color-gold-tint: rgba(168, 113, 10, 0.1);
 
-  /* coral-red, used for errors/warnings */
-  --color-clay: #d6402a;
-  --color-clay-tint: rgba(214, 64, 42, 0.08);
+  --color-clay: #b02e3c;
+  --color-clay-tint: rgba(176, 46, 60, 0.09);
 }
 
 @layer base {
@@ -37,12 +35,7 @@
   body {
     font-family: var(--font-sans);
     color: var(--color-ink);
-    background:
-      radial-gradient(900px 480px at 12% -10%, rgba(15, 169, 104, 0.06), transparent 60%),
-      radial-gradient(700px 420px at 92% 0%, rgba(194, 118, 10, 0.05), transparent 55%),
-      repeating-linear-gradient(0deg, rgba(16, 21, 28, 0.028) 0 1px, transparent 1px 40px),
-      repeating-linear-gradient(90deg, rgba(16, 21, 28, 0.028) 0 1px, transparent 1px 40px),
-      var(--color-paper);
+    background: var(--color-paper);
     min-height: 100vh;
   }
 
@@ -63,12 +56,17 @@
   .paper-card {
     background: #ffffff;
     border: 1px solid var(--color-line);
-    box-shadow: 0 1px 0 rgba(16, 21, 28, 0.02), 0 10px 24px -18px rgba(16, 21, 28, 0.16);
+    box-shadow: 0 1px 0 rgba(23, 26, 31, 0.02), 0 8px 20px -16px rgba(23, 26, 31, 0.18);
   }
 
   .num {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
   }
 }
 

@@ -60,7 +60,7 @@ export function NumberInput({ prefix, suffix, className = "", ...props }) {
 export function Checkbox({ label, ...props }) {
   return (
     <label className="flex items-start gap-2.5 rounded-lg border border-line px-3.5 py-2.5 cursor-pointer hover:border-pine/50 hover:bg-pine-tint/30 transition has-checked:border-pine has-checked:bg-pine-tint/50">
-      <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-[#0fa968]" {...props} />
+      <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-pine" {...props} />
       <span className="text-sm text-ink leading-snug">{label}</span>
     </label>
   );
@@ -82,8 +82,8 @@ export function Button({ variant = "primary", className = "", children, ...props
 export function Badge({ tone = "pine", children }) {
   const tones = {
     pine: "bg-pine-tint text-pine-dim border-pine/30",
-    gold: "bg-gold-tint text-[#7a5a12] border-gold/40",
-    clay: "bg-clay-tint text-[#7a2f14] border-clay/30",
+    gold: "bg-gold-tint text-[#6b4a05] border-gold/40",
+    clay: "bg-clay-tint text-[#7a1f28] border-clay/30",
     neutral: "bg-paper-dim text-ink-soft border-line-strong",
   };
   return <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold font-mono ${tones[tone]}`}>{children}</span>;

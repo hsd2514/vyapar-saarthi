@@ -1,25 +1,27 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 
-const STORAGE_KEY = "vyapar-saarthi-voice-v1";
+const STORAGE_KEY = "vyapar-saarthi-margin-v1";
 
 const defaultProfile = {
   businessType: "",
   district: "",
   block: "",
-  monthlyRevenue: "",
-  yearsInOperation: "",
-  challenges: [],
+  village: "",
+  availableMarginCapital: "",
 };
 
-const defaultCalculators = {
-  breakEven: { fixedCosts: "", variableCostPerUnit: "", pricePerUnit: "" },
-  pricing: { unitCost: "", desiredMarginPct: "", marketPrice: "" },
-  workingCapital: { monthlyExpenses: "", inventoryDays: "", receivableDays: "" },
+// Optional operational inputs used only for the working-capital-by-phase
+// calculation on the Repayment Plan screen - not part of the PS's 3 core
+// intake inputs, kept separate and always editable/defaultable.
+const defaultOperations = {
+  monthlyOperationalCost: "",
+  inventoryDays: "",
+  receivableDays: "",
 };
 
 const initialState = {
   profile: defaultProfile,
-  calculators: defaultCalculators,
+  operations: defaultOperations,
   conversation: [], // [{ role: "agent" | "user", text: string }]
   agentHistory: [], // raw pydantic-ai message history, round-tripped to the backend
   intakeDone: false,
@@ -33,11 +35,7 @@ function loadInitial() {
     const parsed = JSON.parse(raw);
     return {
       profile: { ...defaultProfile, ...parsed.profile },
-      calculators: {
-        breakEven: { ...defaultCalculators.breakEven, ...parsed.calculators?.breakEven },
-        pricing: { ...defaultCalculators.pricing, ...parsed.calculators?.pricing },
-        workingCapital: { ...defaultCalculators.workingCapital, ...parsed.calculators?.workingCapital },
-      },
+      operations: { ...defaultOperations, ...parsed.operations },
       conversation: parsed.conversation || [],
       agentHistory: parsed.agentHistory || [],
       intakeDone: parsed.intakeDone || false,
@@ -61,8 +59,8 @@ export function AppProvider({ children }) {
     setState((s) => ({ ...s, profile: { ...s.profile, ...patch } }));
   }, []);
 
-  const updateCalculator = useCallback((name, patch) => {
-    setState((s) => ({ ...s, calculators: { ...s.calculators, [name]: { ...s.calculators[name], ...patch } } }));
+  const updateOperations = useCallback((patch) => {
+    setState((s) => ({ ...s, operations: { ...s.operations, ...patch } }));
   }, []);
 
   const pushConversation = useCallback((entry) => {
@@ -81,9 +79,10 @@ export function AppProvider({ children }) {
         ...(patch.business_type ? { businessType: patch.business_type } : {}),
         ...(patch.district ? { district: patch.district } : {}),
         ...(patch.block ? { block: patch.block } : {}),
-        ...(patch.monthly_revenue !== undefined && patch.monthly_revenue !== null ? { monthlyRevenue: String(patch.monthly_revenue) } : {}),
-        ...(patch.years_in_operation !== undefined && patch.years_in_operation !== null ? { yearsInOperation: String(patch.years_in_operation) } : {}),
-        ...(patch.challenges?.length ? { challenges: Array.from(new Set([...s.profile.challenges, ...patch.challenges])) } : {}),
+        ...(patch.village ? { village: patch.village } : {}),
+        ...(patch.available_margin_capital !== undefined && patch.available_margin_capital !== null
+          ? { availableMarginCapital: String(patch.available_margin_capital) }
+          : {}),
       },
     }));
   }, []);
@@ -106,7 +105,7 @@ export function AppProvider({ children }) {
       value={{
         ...state,
         updateProfile,
-        updateCalculator,
+        updateOperations,
         pushConversation,
         setAgentHistory,
         applyProfilePatch,

@@ -2,64 +2,67 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppState } from "../context/AppContext";
 import { api } from "../lib/api";
-import { calcBreakEven, calcPricingCheck, calcWorkingCapital } from "../lib/calculators";
-import { BUSINESS_TYPE_LABELS, CHALLENGE_LABELS, formatINR } from "../data/constants";
+import { BUSINESS_TYPE_LABELS, formatINR } from "../data/constants";
 import { Card, PageHeader, SectionLabel, Badge, StatRow, Button, Spinner } from "../components/ui";
 
-function scoreBand(score) {
-  if (score >= 75) return "Strong";
-  if (score >= 50) return "Moderate";
-  return "Needs Improvement";
-}
-
 export default function Summary() {
-  const { profile, calculators, resetAll } = useAppState();
+  const { profile, operations, resetAll } = useAppState();
   const navigate = useNavigate();
-  const [viability, setViability] = useState(null);
-  const [schemes, setSchemes] = useState([]);
+  const [structuring, setStructuring] = useState(null);
+  const [schedule, setSchedule] = useState(null);
+  const [workingCapital, setWorkingCapital] = useState(null);
+  const [feasibility, setFeasibility] = useState(null);
   const [advisory, setAdvisory] = useState(null);
   const [advisoryLoading, setAdvisoryLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const be = calcBreakEven(calculators.breakEven);
-  const pc = calcPricingCheck(calculators.pricing);
-  const wc = calcWorkingCapital(calculators.workingCapital);
-
   useEffect(() => {
-    if (!profile.businessType || !profile.district) return;
+    if (!profile.availableMarginCapital || !profile.district || !profile.block || !profile.businessType) return;
     Promise.all([
-      api.viability(profile.district, profile.businessType),
-      api.schemes(Number(profile.monthlyRevenue) || 0, Number(profile.yearsInOperation) || 0, profile.businessType),
+      api.financialStructuring(Number(profile.availableMarginCapital)),
+      api.feasibilityReport(profile.district, profile.block, profile.businessType),
     ])
-      .then(([v, s]) => {
-        setViability(v);
-        setSchemes(s.schemes.filter((x) => x.eligible));
+      .then(([s, f]) => {
+        setStructuring(s);
+        setFeasibility(f);
+        if (s.scheme) {
+          return api.repaymentSchedule(s.max_loan_amount, s.scheme.annual_rate_pct, s.scheme.tenure_months, s.scheme.moratorium_months);
+        }
+        return null;
       })
+      .then((sched) => setSchedule(sched))
       .catch((e) => setError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile.businessType, profile.district]);
+  }, [profile.availableMarginCapital, profile.district, profile.block, profile.businessType]);
 
   useEffect(() => {
-    if (!viability) return;
+    if (!schedule || !operations.monthlyOperationalCost) return;
+    api
+      .workingCapital(Number(operations.monthlyOperationalCost), Number(operations.inventoryDays) || 0, Number(operations.receivableDays) || 0, schedule.monthly_emi)
+      .then(setWorkingCapital)
+      .catch((e) => setError(e.message));
+  }, [schedule, operations.monthlyOperationalCost, operations.inventoryDays, operations.receivableDays]);
+
+  useEffect(() => {
+    if (!structuring || !feasibility) return;
     setAdvisoryLoading(true);
     api
       .advisory({
-        profile: { business_type: profile.businessType, district: profile.district, monthly_revenue: Number(profile.monthlyRevenue) || 0 },
-        break_even: { contribution_margin: be.contributionMargin, break_even_units: be.breakEvenUnits, is_viable: be.isViable },
-        pricing: { verdict: pc.verdict, cost_plus_price: pc.costPlusPrice, market_price: pc.marketPrice },
-        working_capital: { working_capital_needed: wc.workingCapitalNeeded, cash_cycle_days: wc.cashCycleDays },
-        viability: { final_score: viability.final_score, breakdown: viability.breakdown },
-        matched_schemes: schemes.map((s) => ({ name: s.name, max_loan: s.max_loan })),
+        profile: { business_type: profile.businessType, district: profile.district, block: profile.block, available_margin_capital: Number(profile.availableMarginCapital) },
+        financial_structuring: structuring,
+        repayment_schedule: schedule || {},
+        working_capital: workingCapital || {},
+        feasibility,
       })
       .then(setAdvisory)
       .catch((e) => setError(e.message))
       .finally(() => setAdvisoryLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viability]);
+  }, [structuring, feasibility, schedule, workingCapital]);
 
   if (!profile.businessType) {
     return (
-      <Card className="text-center py-14">
+      <Card className="max-w-3xl text-center py-14">
         <p className="text-ink-soft mb-4">Complete the earlier steps first to generate your summary.</p>
         <button onClick={() => navigate("/intake")} className="text-pine-dim font-semibold underline underline-offset-4">
           Start at Voice Intake
@@ -73,17 +76,17 @@ export default function Summary() {
 
   return (
     <div>
-      <div className="flex flex-wrap items-start justify-between gap-4 mb-8 sm:mb-10 no-print">
-        <PageHeader eyebrow="Step 5 of 5" title="Credit-readiness summary" description="Deterministic figures, plus a plain-language AI advisory layer that only explains the numbers below - it never computes them." />
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-8 sm:mb-10 no-print max-w-3xl">
+        <PageHeader eyebrow="Step 5 of 5" title="Feasibility & credit-readiness summary" description="Deterministic figures, plus a plain-language AI advisory layer that only explains the numbers below - it never computes them." />
         <Button onClick={() => window.print()} className="mt-1">Print / Save as PDF</Button>
       </div>
 
-      {error && <Card className="mb-6 border-clay/30 bg-clay-tint text-[#7a2f14] text-sm">Could not reach the backend: {error}</Card>}
+      {error && <Card className="max-w-3xl mb-6 border-clay/30 bg-clay-tint text-[#7a1f28] text-sm">Could not reach the backend: {error}</Card>}
 
-      <div className="space-y-6">
+      <div className="max-w-3xl space-y-6">
         <Card>
           <div className="flex items-center justify-between mb-1">
-            <h1 className="font-display text-2xl font-bold">Vyapar Saarthi - Credit Readiness Report</h1>
+            <h1 className="font-display text-2xl font-bold">Vyapar Saarthi - Feasibility & Credit Report</h1>
             <span className="text-xs font-mono text-ink-faint">{today}</span>
           </div>
         </Card>
@@ -102,9 +105,7 @@ export default function Summary() {
                 </li>
               ))}
             </ul>
-            {advisory.caution && (
-              <div className="rounded-lg border border-clay/30 bg-clay-tint px-3.5 py-2.5 text-sm text-[#7a2f14]">{advisory.caution}</div>
-            )}
+            {advisory.caution && <div className="rounded-lg border border-clay/30 bg-clay-tint px-3.5 py-2.5 text-sm text-[#7a1f28]">{advisory.caution}</div>}
           </Card>
         )}
         {advisoryLoading && (
@@ -117,93 +118,61 @@ export default function Summary() {
           <SectionLabel>Business Profile</SectionLabel>
           <div className="grid sm:grid-cols-2 gap-x-8">
             <div>
-              <StatRow label="Business type" value={typeLabel} mono={false} />
-              <StatRow label="Location" value={`${profile.block}, ${profile.district}`} mono={false} />
+              <StatRow label="Business category" value={typeLabel} mono={false} />
+              <StatRow label="Location" value={`${profile.block}${profile.village ? `, ${profile.village}` : ""}, ${profile.district}`} mono={false} />
             </div>
             <div>
-              <StatRow label="Monthly revenue (est.)" value={formatINR(Number(profile.monthlyRevenue))} />
-              <StatRow label="Years in operation" value={profile.yearsInOperation} />
+              <StatRow label="Available margin capital" value={formatINR(Number(profile.availableMarginCapital))} />
             </div>
-          </div>
-          {profile.challenges.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {profile.challenges.map((c) => (
-                <Badge tone="neutral" key={c}>
-                  {CHALLENGE_LABELS[c]}
-                </Badge>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        <Card>
-          <SectionLabel>Financial Calculators</SectionLabel>
-          <div className="grid sm:grid-cols-3 gap-4">
-            <MiniCalc title="Break-even">
-              <StatRow label="Contribution margin" value={formatINR(be.contributionMargin)} />
-              <StatRow label="Break-even units" value={be.isViable ? Math.ceil(be.breakEvenUnits) : "N/A"} />
-              <StatRow label="Break-even revenue" value={be.isViable ? formatINR(be.breakEvenRevenue) : "N/A"} />
-            </MiniCalc>
-            <MiniCalc title="Pricing check">
-              <StatRow label="Cost-plus price" value={formatINR(pc.costPlusPrice)} />
-              <StatRow label="Market price" value={formatINR(pc.marketPrice)} />
-              <StatRow label="Verdict" value={pc.verdict === "room_to_compete" ? "Competitive" : pc.verdict === "needs_adjustment" ? "Adjust cost/margin" : "N/A"} mono={false} />
-            </MiniCalc>
-            <MiniCalc title="Working capital">
-              <StatRow label="Cash cycle" value={`${wc.cashCycleDays} days`} />
-              <StatRow label="Daily expense" value={formatINR(wc.dailyExpense)} />
-              <StatRow label="Capital needed" value={formatINR(wc.workingCapitalNeeded)} />
-            </MiniCalc>
           </div>
         </Card>
 
-        {viability && (
+        {structuring && (
           <Card>
-            <div className="flex items-center justify-between mb-3">
-              <SectionLabel>Viability Score</SectionLabel>
-              <span className="font-display text-xl font-bold">{viability.final_score}/100 - {scoreBand(viability.final_score)}</span>
-            </div>
-            <div className="space-y-2">
-              {viability.breakdown.map((row) => (
-                <div key={row.key} className="flex items-center justify-between text-sm border-b border-line py-1.5 last:border-0">
-                  <span className="text-ink-soft">
-                    {row.label} <span className="font-mono text-xs text-ink-faint">(w={row.weight.toFixed(2)})</span>
-                  </span>
-                  <span className="font-mono font-medium">{row.contribution.toFixed(1)} pts</span>
-                </div>
-              ))}
-            </div>
+            <SectionLabel>Financial Structuring & Scheme</SectionLabel>
+            <StatRow label="Project cost" value={formatINR(structuring.project_cost)} />
+            <StatRow label="Maximum loan eligibility" value={structuring.max_loan_amount !== null ? formatINR(structuring.max_loan_amount) : "-"} />
+            {structuring.scheme ? (
+              <>
+                <StatRow label="Scheme" value={structuring.scheme.name} mono={false} />
+                <StatRow label="Terms" value={`${structuring.scheme.annual_rate_pct}% p.a., ${structuring.scheme.tenure_months} months, ${structuring.scheme.moratorium_months}-month moratorium`} mono={false} />
+              </>
+            ) : (
+              <p className="text-sm text-clay mt-2">No scheme tier matched this project cost.</p>
+            )}
           </Card>
         )}
 
-        <Card>
-          <SectionLabel>Matched Government Schemes</SectionLabel>
-          {schemes.length === 0 ? (
-            <p className="text-sm text-ink-soft">No schemes matched current profile figures.</p>
-          ) : (
-            <div className="space-y-4">
-              {schemes.map((s) => (
-                <div key={s.id} className="border-b border-line pb-4 last:border-0 last:pb-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="font-semibold">{s.name}</p>
-                    <span className="text-sm font-mono text-pine-dim">up to {formatINR(s.max_loan)}</span>
-                  </div>
-                  <p className="text-sm text-ink-soft mb-2">{s.rule_text}</p>
-                  <p className="text-xs font-mono uppercase tracking-wide text-ink-faint mb-1">Checklist</p>
-                  <ul className="text-sm text-ink-soft grid sm:grid-cols-2 gap-x-4 gap-y-0.5 list-disc list-inside">
-                    {s.documents.map((d, i) => (
-                      <li key={i}>{d}</li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
+        {schedule && (
+          <Card>
+            <SectionLabel>Repayment Plan</SectionLabel>
+            <StatRow label="Monthly EMI (after moratorium)" value={formatINR(schedule.monthly_emi)} />
+            <StatRow label="Total repayment over tenure" value={formatINR(schedule.total_repayment)} />
+            <StatRow label="Total interest" value={formatINR(schedule.total_interest)} />
+            {workingCapital && (
+              <>
+                <StatRow label="Monthly cash needed (moratorium)" value={formatINR(workingCapital.monthly_cash_needed_during_moratorium)} />
+                <StatRow label="Monthly cash needed (post-moratorium)" value={formatINR(workingCapital.monthly_cash_needed_after_moratorium)} />
+              </>
+            )}
+          </Card>
+        )}
+
+        {feasibility && (
+          <Card>
+            <SectionLabel>Feasibility Highlights</SectionLabel>
+            <StatRow label="Addressable consumers" value={feasibility.market_reach.addressable_consumers.toLocaleString("en-IN")} />
+            <StatRow label="Competitor density" value={`${feasibility.competitor_mapping.competitor_count} / ${feasibility.competitor_mapping.scale_ceiling}`} mono={false} />
+            <StatRow label="Market read" value={feasibility.opportunity_analysis.is_underserved ? "Under-served niche" : "Competitive market"} mono={false} />
+            {feasibility.product_market_value && (
+              <StatRow label="Suggested entry price" value={`Rs ${feasibility.product_market_value.suggested_entry_price.toFixed(0)} / ${feasibility.product_market_value.unit}`} mono={false} />
+            )}
+          </Card>
+        )}
       </div>
 
-      <div className="mt-10 flex items-center justify-between no-print">
-        <Button variant="secondary" onClick={() => navigate("/schemes")}>← Back</Button>
+      <div className="max-w-3xl mt-10 flex items-center justify-between no-print">
+        <Button variant="secondary" onClick={() => navigate("/repayment-plan")}>← Back</Button>
         <Button
           variant="ghost"
           onClick={() => {
@@ -216,15 +185,6 @@ export default function Summary() {
           Start over
         </Button>
       </div>
-    </div>
-  );
-}
-
-function MiniCalc({ title, children }) {
-  return (
-    <div className="rounded-lg border border-line p-3.5">
-      <p className="font-medium text-sm mb-2">{title}</p>
-      {children}
     </div>
   );
 }

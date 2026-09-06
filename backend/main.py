@@ -1,21 +1,18 @@
 from __future__ import annotations
 
-from datetime import date
-
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pydantic_ai import ModelMessagesTypeAdapter
 from pydantic_ai.messages import ModelMessage
 
-from agent import ConversationTurn, ProfilePatch, get_advisory_agent, get_intake_agent
+from agent import ConversationTurn, ProfilePatch, get_advisory_agent, get_feasibility_agent, get_intake_agent
 from city_data import BUSINESS_TYPES, CITY_DATA
 from deterministic import (
-    calc_break_even,
-    calc_pricing_check,
-    calc_working_capital,
-    compute_viability_score,
-    match_schemes,
+    calc_financial_structuring,
+    calc_repayment_schedule,
+    calc_working_capital_by_phase,
+    generate_feasibility_report,
 )
 
 app = FastAPI(title="Vyapar Saarthi API")
@@ -36,7 +33,7 @@ app.add_middleware(
 def get_cities():
     return {
         "districts": [
-            {"key": key, "label": d["label"], "blocks": d["blocks"], "note": d["profile_note"]}
+            {"key": key, "label": d["label"], "blocks": list(d["blocks"].keys()), "note": d["profile_note"]}
             for key, d in CITY_DATA.items()
         ],
         "business_types": BUSINESS_TYPES,
@@ -84,63 +81,76 @@ async def agent_turn(req: TurnRequest):
 
 
 # ---------------------------------------------------------------------------
-# Deterministic calculators + viability + schemes (no LLM involved at all)
+# Module 2: Smart Financial Calculator & Scheme Router (no LLM at all)
 # ---------------------------------------------------------------------------
 
-class CalcRequest(BaseModel):
-    fixed_costs: float
-    variable_cost_per_unit: float
-    price_per_unit: float
+class FinancialStructuringRequest(BaseModel):
+    available_margin_capital: float
 
 
-@app.post("/api/calc/break-even")
-def break_even(req: CalcRequest):
-    return calc_break_even(req.fixed_costs, req.variable_cost_per_unit, req.price_per_unit)
+@app.post("/api/financial-structuring")
+def financial_structuring(req: FinancialStructuringRequest):
+    return calc_financial_structuring(req.available_margin_capital)
 
 
-class PricingRequest(BaseModel):
-    unit_cost: float
-    desired_margin_pct: float
-    market_price: float
+class RepaymentScheduleRequest(BaseModel):
+    principal: float
+    annual_rate_pct: float
+    tenure_months: int
+    moratorium_months: int
 
 
-@app.post("/api/calc/pricing")
-def pricing(req: PricingRequest):
-    return calc_pricing_check(req.unit_cost, req.desired_margin_pct, req.market_price)
+@app.post("/api/repayment-schedule")
+def repayment_schedule(req: RepaymentScheduleRequest):
+    return calc_repayment_schedule(req.principal, req.annual_rate_pct, req.tenure_months, req.moratorium_months)
 
 
-class WorkingCapitalRequest(BaseModel):
-    monthly_expenses: float
+class WorkingCapitalPhaseRequest(BaseModel):
+    monthly_operational_cost: float
     inventory_days: float
     receivable_days: float
+    monthly_emi: float
 
 
-@app.post("/api/calc/working-capital")
-def working_capital(req: WorkingCapitalRequest):
-    return calc_working_capital(req.monthly_expenses, req.inventory_days, req.receivable_days)
+@app.post("/api/working-capital")
+def working_capital(req: WorkingCapitalPhaseRequest):
+    return calc_working_capital_by_phase(req.monthly_operational_cost, req.inventory_days, req.receivable_days, req.monthly_emi)
 
 
-class ViabilityRequest(BaseModel):
+# ---------------------------------------------------------------------------
+# Module 1: Hyper-Local Business Feasibility Report (deterministic facts;
+# optional LLM narration layered on top, never replacing the numbers)
+# ---------------------------------------------------------------------------
+
+class FeasibilityRequest(BaseModel):
     district: str
+    block: str
     business_type: str
 
 
-@app.post("/api/viability")
-def viability(req: ViabilityRequest):
+@app.post("/api/feasibility-report")
+def feasibility_report(req: FeasibilityRequest):
     if req.district not in CITY_DATA:
         raise HTTPException(status_code=400, detail=f"Unknown district '{req.district}'")
-    return compute_viability_score(req.district, req.business_type, date.today())
+    try:
+        return generate_feasibility_report(req.district, req.block, req.business_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-class SchemesRequest(BaseModel):
-    monthly_revenue: float
-    years_in_operation: float
-    business_type: str
-
-
-@app.post("/api/schemes")
-def schemes(req: SchemesRequest):
-    return {"schemes": match_schemes(req.monthly_revenue, req.years_in_operation, req.business_type)}
+@app.post("/api/feasibility-narrative")
+async def feasibility_narrative(req: FeasibilityRequest):
+    report = generate_feasibility_report(req.district, req.block, req.business_type)
+    try:
+        prompt = (
+            f"Opportunity analysis facts: {report['opportunity_analysis']}\n"
+            f"SWOT facts: {report['swot']}\n"
+            f"Pricing facts: {report['product_market_value']}"
+        )
+        result = await get_feasibility_agent().run(prompt)
+        return result.output
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(status_code=502, detail=f"Feasibility narration failed: {exc}") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -149,11 +159,10 @@ def schemes(req: SchemesRequest):
 
 class AdvisoryRequest(BaseModel):
     profile: dict
-    break_even: dict
-    pricing: dict
+    financial_structuring: dict
+    repayment_schedule: dict
     working_capital: dict
-    viability: dict
-    matched_schemes: list[dict]
+    feasibility: dict
 
 
 @app.post("/api/advisory")
@@ -161,11 +170,10 @@ async def advisory(req: AdvisoryRequest):
     try:
         prompt = (
             "Profile: " + str(req.profile) + "\n"
-            "Break-even: " + str(req.break_even) + "\n"
-            "Pricing check: " + str(req.pricing) + "\n"
+            "Financial structuring: " + str(req.financial_structuring) + "\n"
+            "Repayment schedule: " + str(req.repayment_schedule) + "\n"
             "Working capital: " + str(req.working_capital) + "\n"
-            "Viability score: " + str(req.viability) + "\n"
-            "Matched schemes: " + str(req.matched_schemes)
+            "Feasibility report: " + str(req.feasibility)
         )
         result = await get_advisory_agent().run(prompt)
         return result.output

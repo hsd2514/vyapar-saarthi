@@ -10,9 +10,8 @@ function toBackendProfile(profile) {
     business_type: profile.businessType || null,
     district: profile.district || null,
     block: profile.block || null,
-    monthly_revenue: profile.monthlyRevenue ? Number(profile.monthlyRevenue) : null,
-    years_in_operation: profile.yearsInOperation ? Number(profile.yearsInOperation) : null,
-    challenges: profile.challenges || [],
+    village: profile.village || null,
+    available_margin_capital: profile.availableMarginCapital ? Number(profile.availableMarginCapital) : null,
   };
 }
 
@@ -103,8 +102,14 @@ export default function VoiceAgent({ onDone }) {
   }
 
   return (
-    <div className="paper-card rounded-2xl p-5 sm:p-7">
-      <div ref={scrollRef} className="max-h-96 overflow-y-auto space-y-3 pr-1 mb-5">
+    <div className="paper-card rounded-2xl p-5 sm:p-7 flex flex-col h-full min-h-105">
+      <div ref={scrollRef} className="flex-1 min-h-60 overflow-y-auto scrollbar-thin space-y-3 pr-1 mb-5">
+        {conversation.length === 0 && !thinking && (
+          <div className="h-full flex flex-col items-center justify-center text-center gap-2 text-ink-faint py-10">
+            <MicIcon className="opacity-40 h-8 w-8" />
+            <p className="text-sm">Saarthi will greet you here in a moment.</p>
+          </div>
+        )}
         {conversation.map((entry, i) => (
           <div key={i} className={`flex ${entry.role === "agent" ? "justify-start" : "justify-end"}`}>
             <div
@@ -162,9 +167,9 @@ export default function VoiceAgent({ onDone }) {
   );
 }
 
-function MicIcon() {
+function MicIcon({ className = "" }) {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
       <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
       <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
       <line x1="12" y1="19" x2="12" y2="23" />

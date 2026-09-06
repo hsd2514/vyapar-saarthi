@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useAppState } from "../context/AppContext";
 import { api } from "../lib/api";
-import { BUSINESS_TYPE_LABELS, CHALLENGE_LABELS } from "../data/constants";
-import { Card, PageHeader, SectionLabel, Field, TextInput, Select, NumberInput, Checkbox, Badge } from "../components/ui";
+import { BUSINESS_TYPE_LABELS } from "../data/constants";
+import { Card, PageHeader, SectionLabel, Field, TextInput, Select, NumberInput, Badge } from "../components/ui";
 import StepFooter from "../components/StepFooter";
 import VoiceAgent from "../components/VoiceAgent";
 
-const REQUIRED_FIELDS = ["businessType", "district", "block", "monthlyRevenue", "yearsInOperation"];
+const REQUIRED_FIELDS = ["businessType", "district", "block", "availableMarginCapital"];
 
 export default function Intake() {
   const { profile, updateProfile, intakeDone, markStepReached } = useAppState();
@@ -16,13 +16,9 @@ export default function Intake() {
     api.getCities().then((res) => setDistricts(res.districts)).catch(() => setDistricts([]));
   }, []);
 
-  const toggleChallenge = (value) => {
-    const has = profile.challenges.includes(value);
-    updateProfile({ challenges: has ? profile.challenges.filter((c) => c !== value) : [...profile.challenges, value] });
-  };
-
   const isValid = REQUIRED_FIELDS.every((f) => profile[f] !== "" && profile[f] !== undefined && profile[f] !== null);
   const currentDistrict = districts.find((d) => d.key === profile.district);
+  const projectCostPreview = profile.availableMarginCapital ? Number(profile.availableMarginCapital) / 0.1 : null;
 
   return (
     <div>
@@ -32,7 +28,7 @@ export default function Intake() {
         description="Speak naturally - Saarthi asks one question at a time and fills the profile below as you go. You can correct anything by hand afterward."
       />
 
-      <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-6 items-start">
+      <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-6 items-stretch">
         <VoiceAgent onDone={() => markStepReached(1)} />
 
         <Card>
@@ -42,7 +38,7 @@ export default function Intake() {
           </div>
 
           <div className="space-y-4">
-            <Field label="Business type">
+            <Field label="Business category">
               <Select value={profile.businessType} onChange={(e) => updateProfile({ businessType: e.target.value })}>
                 <option value="">Not yet mentioned</option>
                 {Object.entries(BUSINESS_TYPE_LABELS).map(([value, label]) => (
@@ -76,23 +72,20 @@ export default function Intake() {
               </Field>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Monthly revenue">
-                <NumberInput prefix="Rs" value={profile.monthlyRevenue} onChange={(e) => updateProfile({ monthlyRevenue: e.target.value })} placeholder="e.g. 18000" />
-              </Field>
-              <Field label="Years running">
-                <NumberInput suffix="yrs" value={profile.yearsInOperation} onChange={(e) => updateProfile({ yearsInOperation: e.target.value })} placeholder="e.g. 2" />
-              </Field>
-            </div>
+            <Field label="Village" hint="Optional">
+              <TextInput value={profile.village} onChange={(e) => updateProfile({ village: e.target.value })} placeholder="e.g. Ambulga" />
+            </Field>
 
-            <Field label="Challenges mentioned">
-              <div className="grid grid-cols-1 gap-2 mt-1">
-                {Object.entries(CHALLENGE_LABELS).map(([value, label]) => (
-                  <Checkbox key={value} label={label} checked={profile.challenges.includes(value)} onChange={() => toggleChallenge(value)} />
-                ))}
-              </div>
+            <Field label="Available margin capital" hint="The cash you already have saved to contribute as your own 10% share">
+              <NumberInput prefix="Rs" value={profile.availableMarginCapital} onChange={(e) => updateProfile({ availableMarginCapital: e.target.value })} placeholder="e.g. 100000" />
             </Field>
           </div>
+
+          {projectCostPreview && (
+            <div className="mt-4 rounded-lg border border-pine/25 bg-pine-tint/40 px-3.5 py-2.5 text-sm text-ink-soft">
+              At 10% margin, this implies a project cost of roughly <b className="text-ink num">Rs {Math.round(projectCostPreview).toLocaleString("en-IN")}</b> - the next step works out the exact loan and scheme.
+            </div>
+          )}
 
           {currentDistrict && (
             <p className="mt-4 text-xs text-ink-faint border-t border-line pt-3">{currentDistrict.note}</p>
@@ -100,7 +93,7 @@ export default function Intake() {
         </Card>
       </div>
 
-      <StepFooter nextTo="/calculators" nextDisabled={!isValid} nextLabel="Continue to calculators" />
+      <StepFooter nextTo="/feasibility" nextDisabled={!isValid} nextLabel="Continue to feasibility report" />
     </div>
   );
 }

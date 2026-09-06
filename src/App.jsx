@@ -2,9 +2,9 @@ import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppProvider } from "./context/AppContext";
 import Layout from "./components/Layout";
 import Intake from "./pages/Intake";
-import Calculators from "./pages/Calculators";
-import Viability from "./pages/Viability";
-import Schemes from "./pages/Schemes";
+import FeasibilityReport from "./pages/FeasibilityReport";
+import FinancialPlan from "./pages/FinancialPlan";
+import RepaymentPlan from "./pages/RepaymentPlan";
 import Summary from "./pages/Summary";
 
 export default function App() {
@@ -15,9 +15,9 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Navigate to="/intake" replace />} />
             <Route path="/intake" element={<Intake />} />
-            <Route path="/calculators" element={<Calculators />} />
-            <Route path="/viability" element={<Viability />} />
-            <Route path="/schemes" element={<Schemes />} />
+            <Route path="/feasibility" element={<FeasibilityReport />} />
+            <Route path="/financial-plan" element={<FinancialPlan />} />
+            <Route path="/repayment-plan" element={<RepaymentPlan />} />
             <Route path="/summary" element={<Summary />} />
             <Route path="*" element={<Navigate to="/intake" replace />} />
           </Routes>

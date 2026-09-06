@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8001";
 
 async function request(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -21,20 +21,38 @@ export const api = {
       body: JSON.stringify({ message, history, profile_so_far: profileSoFar }),
     }),
 
-  viability: (district, businessType) =>
-    request("/api/viability", {
+  financialStructuring: (availableMarginCapital) =>
+    request("/api/financial-structuring", {
       method: "POST",
-      body: JSON.stringify({ district, business_type: businessType }),
+      body: JSON.stringify({ available_margin_capital: availableMarginCapital }),
     }),
 
-  schemes: (monthlyRevenue, yearsInOperation, businessType) =>
-    request("/api/schemes", {
+  repaymentSchedule: (principal, annualRatePct, tenureMonths, moratoriumMonths) =>
+    request("/api/repayment-schedule", {
       method: "POST",
       body: JSON.stringify({
-        monthly_revenue: monthlyRevenue,
-        years_in_operation: yearsInOperation,
-        business_type: businessType,
+        principal,
+        annual_rate_pct: annualRatePct,
+        tenure_months: tenureMonths,
+        moratorium_months: moratoriumMonths,
       }),
+    }),
+
+  workingCapital: (monthlyOperationalCost, inventoryDays, receivableDays, monthlyEmi) =>
+    request("/api/working-capital", {
+      method: "POST",
+      body: JSON.stringify({
+        monthly_operational_cost: monthlyOperationalCost,
+        inventory_days: inventoryDays,
+        receivable_days: receivableDays,
+        monthly_emi: monthlyEmi,
+      }),
+    }),
+
+  feasibilityReport: (district, block, businessType) =>
+    request("/api/feasibility-report", {
+      method: "POST",
+      body: JSON.stringify({ district, block, business_type: businessType }),
     }),
 
   advisory: (payload) =>
