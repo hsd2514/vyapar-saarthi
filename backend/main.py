@@ -202,6 +202,16 @@ async def advisory(req: AdvisoryRequest):
         raise HTTPException(status_code=502, detail=f"Advisory call failed: {exc}") from exc
 
 
+from city_data import get_block
+
+@app.get("/api/contacts")
+def get_contacts(district: str, block: str):
+    b = get_block(district, block)
+    if not b:
+        raise HTTPException(status_code=400, detail="Unknown district or block")
+    return {"contacts": b.get("contacts", [])}
+
+
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
