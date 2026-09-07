@@ -23,7 +23,8 @@ uv run fastapi dev main.py --port 8000
 
 `AGENT_MODEL` accepts any Pydantic AI model string - `google:gemini-2.0-flash`,
 `groq:llama-3.3-70b-versatile`, `openai:gpt-4o-mini`, `anthropic:claude-haiku-4-5`,
-etc. Set the matching `*_API_KEY` in `.env`.
+`sarvam:sarvam-105b` (Sarvam AI's OpenAI-compatible endpoint, resolved in
+`backend/agent.py`), etc. Set the matching `*_API_KEY` in `.env`.
 
 **2. Frontend** (Vite + React):
 

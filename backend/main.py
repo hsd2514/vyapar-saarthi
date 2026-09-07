@@ -173,6 +173,24 @@ def feasibility_report(req: FeasibilityRequest):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+
+@app.get("/api/feasibility-report/compare")
+def feasibility_compare(district: str, block: str):
+    """Returns feasibility reports for all 6 business types for the given
+    district + block in one shot. Used by the frontend 'Compare All Categories'
+    panel so it can show all six side-by-side without 6 separate round trips."""
+    if district not in CITY_DATA:
+        raise HTTPException(status_code=400, detail=f"Unknown district '{district}'")
+    by_type: dict = {}
+    for bt_entry in BUSINESS_TYPES:
+        bt = bt_entry["value"]
+        try:
+            by_type[bt] = generate_feasibility_report(district, block, bt)
+        except ValueError:
+            by_type[bt] = None
+    return {"district": district, "block": block, "by_type": by_type}
+
+
 class FeasibilityChatRequest(BaseModel):
     message: str
     history: list[dict] = []  # raw pydantic-ai message dicts round-tripped from the client - this IS the agent's memory
