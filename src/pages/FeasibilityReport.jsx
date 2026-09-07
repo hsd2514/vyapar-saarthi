@@ -6,6 +6,7 @@ import { BUSINESS_TYPE_LABELS, formatCount } from "../data/constants";
 import { Card, PageHeader, Section, TileGrid, FigureTile, Badge, Spinner } from "../components/ui";
 import StepFooter from "../components/StepFooter";
 import FeasibilityAdvisorChat from "../components/FeasibilityAdvisorChat";
+import BusinessComparisonPanel from "../components/BusinessComparisonPanel";
 
 export default function FeasibilityReport() {
   const { profile, markStepReached } = useAppState();
@@ -137,6 +138,12 @@ export default function FeasibilityReport() {
               <PriceScale pricing={report.product_market_value} />
             </Section>
           )}
+
+          <BusinessComparisonPanel
+            district={profile.district}
+            block={profile.block}
+            chosenType={profile.businessType}
+          />
 
           <FeasibilityAdvisorChat district={profile.district} block={profile.block} businessType={profile.businessType} />
         </div>
