@@ -20,6 +20,7 @@ from deterministic import (
     calc_working_capital_by_phase,
     generate_feasibility_report,
 )
+from schemes import match_schemes
 
 # ---------------------------------------------------------------------------
 # In-memory share store
@@ -145,6 +146,18 @@ def repayment_schedule(req: RepaymentScheduleRequest):
         req.moratorium_months,
         req.capitalise_moratorium_interest,
     )
+
+
+@app.get("/api/scheme-match")
+def scheme_match(project_cost: float, business_type: str | None = None):
+    """Ranks real government MSME credit schemes (PMEGP, Mudra tiers,
+    Stand-Up India) plus this tool's own margin-money scheme against the
+    given project cost, using the explainable weighted rules engine in
+    schemes.py - no LLM involved. Each result carries its official portal
+    link so the user can go apply/verify directly."""
+    if project_cost <= 0:
+        raise HTTPException(status_code=400, detail="project_cost must be positive")
+    return {"project_cost": project_cost, "matches": match_schemes(project_cost, business_type)}
 
 
 class WorkingCapitalPhaseRequest(BaseModel):

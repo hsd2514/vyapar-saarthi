@@ -144,6 +144,7 @@ export default function FeasibilityReport() {
             district={profile.district}
             block={profile.block}
             chosenType={profile.businessType}
+            marginCapital={Number(profile.availableMarginCapital) || 0}
           />
 
           <BlockComparisonPanel
