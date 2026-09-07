@@ -16,6 +16,7 @@ export default function RepaymentPlan() {
   const [workingCapital, setWorkingCapital] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [capitalizeInterest, setCapitalizeInterest] = useState(false);
 
   useEffect(() => {
     const benchmark = OPERATIONS_BENCHMARKS[profile.businessType];
@@ -37,12 +38,12 @@ export default function RepaymentPlan() {
       .then((s) => {
         setStructuring(s);
         if (!s.scheme) return null;
-        return api.repaymentSchedule(s.max_loan_amount, s.scheme.annual_rate_pct, s.scheme.tenure_months, s.scheme.moratorium_months);
+        return api.repaymentSchedule(s.max_loan_amount, s.scheme.annual_rate_pct, s.scheme.tenure_months, s.scheme.moratorium_months, capitalizeInterest);
       })
       .then((sched) => setSchedule(sched))
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [profile.availableMarginCapital]);
+  }, [profile.availableMarginCapital, capitalizeInterest]);
 
   useEffect(() => {
     if (!schedule || !operations.monthlyOperationalCost) return;
@@ -110,6 +111,44 @@ export default function RepaymentPlan() {
               <b className="text-ink">nothing for the first {schedule.moratorium_months} months</b> while the business gets going.
               After that, this amount every month for {schedule.repayment_months} months.
             </p>
+
+            <div className="rounded-2xl border-2 border-line bg-paper-dim p-4 mb-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[16px] font-semibold text-ink">Does the loan grow during the free months?</p>
+                  <p className="text-[14px] text-ink-soft mt-0.5 leading-snug">
+                    We are not sure which way your scheme works, so you can check both.
+                  </p>
+                </div>
+                <div className="flex rounded-xl border-2 border-line-strong bg-white p-1" role="group" aria-label="Interest during the free period">
+                  <button
+                    type="button"
+                    onClick={() => setCapitalizeInterest(false)}
+                    className={`rounded-lg px-4 py-2 text-[15px] font-semibold transition ${
+                      !capitalizeInterest ? "bg-pine text-white" : "text-ink-soft hover:text-ink"
+                    }`}
+                  >
+                    No, it stays the same
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCapitalizeInterest(true)}
+                    className={`rounded-lg px-4 py-2 text-[15px] font-semibold transition ${
+                      capitalizeInterest ? "bg-pine text-white" : "text-ink-soft hover:text-ink"
+                    }`}
+                  >
+                    Yes, it grows a little
+                  </button>
+                </div>
+              </div>
+              {capitalizeInterest && schedule.moratorium_interest > 0 && (
+                <p className="mt-3 text-[15px] text-ink-soft leading-relaxed border-t border-line-strong pt-3">
+                  With this option, <b className="text-ink">{formatINR(schedule.moratorium_interest)}</b> of interest builds up during
+                  the free months and gets added to your loan before your monthly amount is worked out - so the amount above is higher
+                  than it would be otherwise.
+                </p>
+              )}
+            </div>
 
             <TileGrid min="200px">
               <FigureTile label="Loan you take" value={formatINR(schedule.principal)} />

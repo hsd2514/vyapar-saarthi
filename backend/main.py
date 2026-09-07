@@ -133,11 +133,18 @@ class RepaymentScheduleRequest(BaseModel):
     annual_rate_pct: float
     tenure_months: int
     moratorium_months: int
+    capitalize_interest: bool = False
 
 
 @app.post("/api/repayment-schedule")
 def repayment_schedule(req: RepaymentScheduleRequest):
-    return calc_repayment_schedule(req.principal, req.annual_rate_pct, req.tenure_months, req.moratorium_months)
+    return calc_repayment_schedule(
+        req.principal,
+        req.annual_rate_pct,
+        req.tenure_months,
+        req.moratorium_months,
+        capitalize_interest=req.capitalize_interest,
+    )
 
 
 class WorkingCapitalPhaseRequest(BaseModel):

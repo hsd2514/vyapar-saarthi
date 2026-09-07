@@ -111,17 +111,53 @@ def calc_emi(principal: float, annual_rate_pct: float, tenure_months: int) -> fl
     return principal * r * (1 + r) ** n / ((1 + r) ** n - 1)
 
 
-def calc_repayment_schedule(principal: float, annual_rate_pct: float, tenure_months: int, moratorium_months: int) -> dict:
-    """No repayment is due during the moratorium (interest is not
-    capitalised during this window - a stated simplifying assumption, since
-    the PS does not specify capitalisation treatment). EMI is then computed
-    via the standard formula over the remaining (tenure - moratorium)
-    months, and grouped into quarters for display, as the PS asks for a
-    quarterly repayment schedule."""
+def calc_repayment_schedule(
+    principal: float,
+    annual_rate_pct: float,
+    tenure_months: int,
+    moratorium_months: int,
+    capitalize_interest: bool = False,
+) -> dict:
+    """No repayment is due during the moratorium, in either mode. Where the
+    two modes differ is what happens to interest that would otherwise have
+    accrued during that free period - and since the PS never specifies
+    which treatment applies, this is an explicit, user-visible choice
+    rather than one hidden assumption:
+
+    - capitalize_interest=False (default): interest is simply NOT charged
+      during the moratorium. EMI is computed via the standard formula on
+      the original principal over the remaining (tenure - moratorium)
+      months. This is the more generous-to-the-borrower reading.
+    - capitalize_interest=True: simple interest accrues on the principal
+      during the moratorium (principal * rate * moratorium_months/12), and
+      gets added to the principal before the standard EMI formula runs
+      over the remaining months. This is how many real concessional
+      schemes actually work, and produces a meaningfully higher EMI.
+
+    Either way the result is grouped into quarters for display, as the PS
+    asks for a quarterly repayment schedule."""
     repayment_months = tenure_months - moratorium_months
-    monthly_emi = calc_emi(principal, annual_rate_pct, repayment_months)
+
+    if capitalize_interest:
+        moratorium_interest = principal * (annual_rate_pct / 100) * (moratorium_months / 12)
+        effective_principal = principal + moratorium_interest
+        assumption = (
+            f"How we worked this out: no payment is due during the {moratorium_months}-month free period, but "
+            f"simple interest still adds up on the loan during it (Rs {moratorium_interest:,.0f} at "
+            f"{annual_rate_pct}% p.a.). That gets added to what you owe before the monthly amount is worked out "
+            "over the months that are left - so the loan itself grows a little before repayment starts."
+        )
+    else:
+        effective_principal = principal
+        moratorium_interest = 0.0
+        assumption = (
+            "How we worked this out: you pay nothing during the free period at the start, and no interest is "
+            "added during it either. The monthly amount is then spread evenly over the months that are left."
+        )
+
+    monthly_emi = calc_emi(effective_principal, annual_rate_pct, repayment_months)
     total_repayment = monthly_emi * repayment_months
-    total_interest = total_repayment - principal
+    total_interest = total_repayment - principal  # vs. the original principal, so this always reflects all interest actually paid
 
     quarters = []
     month = 0
@@ -150,11 +186,14 @@ def calc_repayment_schedule(principal: float, annual_rate_pct: float, tenure_mon
         "tenure_months": tenure_months,
         "moratorium_months": moratorium_months,
         "repayment_months": repayment_months,
+        "capitalize_interest": capitalize_interest,
+        "moratorium_interest": moratorium_interest,
+        "effective_principal": effective_principal,
         "monthly_emi": monthly_emi,
         "total_repayment": total_repayment,
         "total_interest": total_interest,
         "quarters": quarters,
-        "assumption": "How we worked this out: you pay nothing during the free period at the start, and no interest is added during it either. The monthly amount is then spread evenly over the months that are left.",
+        "assumption": assumption,
     }
 
 

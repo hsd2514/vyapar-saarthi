@@ -27,7 +27,7 @@ export const api = {
       body: JSON.stringify({ available_margin_capital: availableMarginCapital }),
     }),
 
-  repaymentSchedule: (principal, annualRatePct, tenureMonths, moratoriumMonths) =>
+  repaymentSchedule: (principal, annualRatePct, tenureMonths, moratoriumMonths, capitalizeInterest = false) =>
     request("/api/repayment-schedule", {
       method: "POST",
       body: JSON.stringify({
@@ -35,6 +35,7 @@ export const api = {
         annual_rate_pct: annualRatePct,
         tenure_months: tenureMonths,
         moratorium_months: moratoriumMonths,
+        capitalize_interest: capitalizeInterest,
       }),
     }),
 

@@ -128,6 +128,44 @@ def test_repayment_schedule_total_interest_is_repayment_minus_principal():
     assert schedule["total_interest"] == pytest.approx(schedule["total_repayment"] - schedule["principal"])
 
 
+def test_repayment_schedule_default_does_not_capitalise_interest():
+    """The default mode (capitalize_interest=False) should leave the
+    principal untouched going into the EMI calculation."""
+    schedule = calc_repayment_schedule(principal=90_000, annual_rate_pct=6.5, tenure_months=36, moratorium_months=3)
+    assert schedule["capitalize_interest"] is False
+    assert schedule["moratorium_interest"] == 0
+    assert schedule["effective_principal"] == pytest.approx(90_000)
+
+
+def test_repayment_schedule_capitalized_mode_adds_moratorium_interest_to_principal():
+    """capitalize_interest=True should accrue simple interest on the
+    principal for moratorium_months and add it before computing EMI."""
+    principal, rate, moratorium = 90_000, 6.5, 3
+    schedule = calc_repayment_schedule(principal=principal, annual_rate_pct=rate, tenure_months=36, moratorium_months=moratorium, capitalize_interest=True)
+    expected_moratorium_interest = principal * (rate / 100) * (moratorium / 12)
+    assert schedule["capitalize_interest"] is True
+    assert schedule["moratorium_interest"] == pytest.approx(expected_moratorium_interest)
+    assert schedule["effective_principal"] == pytest.approx(principal + expected_moratorium_interest)
+
+
+def test_repayment_schedule_capitalized_mode_produces_a_higher_emi():
+    """The whole point of this mode: EMI should be strictly higher than the
+    non-capitalised default, for the same principal/rate/tenure."""
+    kwargs = dict(principal=90_000, annual_rate_pct=6.5, tenure_months=36, moratorium_months=3)
+    default_schedule = calc_repayment_schedule(**kwargs, capitalize_interest=False)
+    capitalized_schedule = calc_repayment_schedule(**kwargs, capitalize_interest=True)
+    assert capitalized_schedule["monthly_emi"] > default_schedule["monthly_emi"]
+    assert capitalized_schedule["total_repayment"] > default_schedule["total_repayment"]
+
+
+def test_repayment_schedule_capitalized_mode_still_covers_every_month():
+    schedule = calc_repayment_schedule(principal=90_000, annual_rate_pct=6.5, tenure_months=36, moratorium_months=3, capitalize_interest=True)
+    total_months_covered = sum(q["months_covered"] for q in schedule["quarters"])
+    assert total_months_covered == 36
+    quarters_sum = sum(q["amount_due"] for q in schedule["quarters"])
+    assert quarters_sum == pytest.approx(schedule["total_repayment"], rel=1e-9)
+
+
 # ---------------------------------------------------------------------------
 # calc_working_capital_by_phase
 # ---------------------------------------------------------------------------
