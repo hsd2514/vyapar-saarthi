@@ -66,4 +66,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+
+  getContacts: (district, block) =>
+    request(`/api/contacts?district=${encodeURIComponent(district)}&block=${encodeURIComponent(block)}`),
 };

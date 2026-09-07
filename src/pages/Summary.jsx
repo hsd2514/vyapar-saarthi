@@ -16,9 +16,15 @@ export default function Summary() {
   const [advisory, setAdvisory] = useState(null);
   const [advisoryLoading, setAdvisoryLoading] = useState(false);
   const [error, setError] = useState("");
+  const [contacts, setContacts] = useState([]);
 
   useEffect(() => {
     if (!profile.availableMarginCapital || !profile.district || !profile.block || !profile.businessType) return;
+    
+    api.getContacts(profile.district, profile.block)
+      .then((res) => setContacts(res.contacts || []))
+      .catch((e) => console.warn("Failed to fetch contacts", e));
+
     Promise.all([
       api.financialStructuring(Number(profile.availableMarginCapital)),
       api.feasibilityReport(profile.district, profile.block, profile.businessType),
@@ -195,6 +201,25 @@ export default function Summary() {
                 </li>
               ))}
             </ul>
+          </Section>
+        )}
+
+        {contacts.length > 0 && (
+          <Section title="Where to take this" className="py-6">
+            <p className="text-sm text-ink-soft mb-4">
+              * Note: These are illustrative sample institutions for your block to give you an idea of where to apply. They are not a real live directory.
+            </p>
+            <div className="grid sm:grid-cols-3 gap-4">
+              {contacts.map((c, i) => (
+                <div key={i} className="rounded-xl border border-line p-4 bg-paper-dim">
+                  <div className="mb-2">
+                    <Badge tone="neutral">{c.type}</Badge>
+                  </div>
+                  <p className="font-semibold text-[16px] text-ink mb-1">{c.name}</p>
+                  <p className="text-[14px] text-ink-soft leading-snug">{c.note}</p>
+                </div>
+              ))}
+            </div>
           </Section>
         )}
       </Card>
