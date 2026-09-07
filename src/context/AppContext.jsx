@@ -29,6 +29,7 @@ const initialState = {
   furthestStep: 0,
   feasibilityChat: [], // [{ role: "agent" | "user", text: string }] - feasibility advisor transcript
   feasibilityChatHistory: [], // raw pydantic-ai message history for the feasibility advisor - its memory
+  voiceLanguage: "en-IN", // BCP-47 tag for SpeechRecognition - persisted so it survives a refresh/navigation
 };
 
 function loadInitial() {
@@ -45,6 +46,7 @@ function loadInitial() {
       furthestStep: parsed.furthestStep || 0,
       feasibilityChat: parsed.feasibilityChat || [],
       feasibilityChatHistory: parsed.feasibilityChatHistory || [],
+      voiceLanguage: parsed.voiceLanguage || "en-IN",
     };
   } catch {
     return initialState;
@@ -108,6 +110,10 @@ export function AppProvider({ children }) {
     setState((s) => ({ ...s, feasibilityChatHistory: history }));
   }, []);
 
+  const setVoiceLanguage = useCallback((lang) => {
+    setState((s) => ({ ...s, voiceLanguage: lang }));
+  }, []);
+
   const resetAll = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
     setState(initialState);
@@ -126,6 +132,7 @@ export function AppProvider({ children }) {
         markStepReached,
         pushFeasibilityChat,
         setFeasibilityChatHistory,
+        setVoiceLanguage,
         resetAll,
       }}
     >
