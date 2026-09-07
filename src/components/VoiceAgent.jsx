@@ -5,6 +5,16 @@ import { Button, Badge, Spinner } from "./ui";
 
 const SpeechRecognitionCtor = typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
 
+// BCP-47 tags SpeechRecognition needs to transcribe each language well.
+// The agent itself already understands code-mixed speech regardless of
+// this setting (its system prompt handles "whatever language they use") -
+// this only tunes what the browser's speech recognizer listens for.
+const LANGUAGES = [
+  { code: "en-IN", label: "English" },
+  { code: "hi-IN", label: "हिंदी" },
+  { code: "mr-IN", label: "मराठी" },
+];
+
 function toBackendProfile(profile) {
   return {
     business_type: profile.businessType || null,
@@ -16,7 +26,7 @@ function toBackendProfile(profile) {
 }
 
 export default function VoiceAgent({ onDone }) {
-  const { profile, conversation, agentHistory, pushConversation, setAgentHistory, applyProfilePatch, setIntakeDone, intakeDone, resetAll } = useAppState();
+  const { profile, conversation, agentHistory, pushConversation, setAgentHistory, applyProfilePatch, setIntakeDone, intakeDone, resetAll, voiceLanguage, setVoiceLanguage } = useAppState();
   const [listening, setListening] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [typedFallback, setTypedFallback] = useState("");
@@ -42,6 +52,7 @@ export default function VoiceAgent({ onDone }) {
     if (!("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = voiceLanguage;
     utter.rate = 1;
     utter.pitch = 1;
     window.speechSynthesis.speak(utter);
@@ -123,7 +134,7 @@ export default function VoiceAgent({ onDone }) {
     }
 
     const recognition = new SpeechRecognitionCtor();
-    recognition.lang = "en-IN";
+    recognition.lang = voiceLanguage;
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
     recognition.onstart = () => setListening(true);
@@ -192,6 +203,24 @@ export default function VoiceAgent({ onDone }) {
 
       {!intakeDone && (
         <>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <p className="text-[15px] font-semibold text-ink-soft">What language will you speak?</p>
+            <div className="flex rounded-xl border-2 border-line-strong bg-white p-1" role="group" aria-label="Speaking language">
+              {LANGUAGES.map((l) => (
+                <button
+                  key={l.code}
+                  type="button"
+                  onClick={() => setVoiceLanguage(l.code)}
+                  className={`rounded-lg px-3.5 py-1.5 text-[15px] font-semibold transition ${
+                    voiceLanguage === l.code ? "bg-pine text-white" : "text-ink-soft hover:text-ink"
+                  }`}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="flex items-center gap-3">
             <button
               type="button"
