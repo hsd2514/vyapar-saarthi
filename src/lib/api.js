@@ -69,4 +69,22 @@ export const api = {
 
   getContacts: (district, block) =>
     request(`/api/contacts?district=${encodeURIComponent(district)}&block=${encodeURIComponent(block)}`),
+
+  /**
+   * Store a compiled summary snapshot on the backend and receive a shareable
+   * link (valid for 24 hours, cleared on server restart).
+   * @param {object} payload - Full summary data to persist.
+   * @param {string} [origin] - Frontend origin used to build the share URL.
+   */
+  shareCreate: (payload, origin = window.location.origin) =>
+    request(`/api/summary/share?frontend_origin=${encodeURIComponent(origin)}`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  /**
+   * Retrieve a stored summary snapshot by its share ID.
+   * Throws if the ID is unknown or expired (server returns 404).
+   */
+  shareGet: (shareId) => request(`/api/summary/share/${encodeURIComponent(shareId)}`),
 };
