@@ -20,6 +20,33 @@ load_dotenv()
 
 AGENT_MODEL = os.environ.get("AGENT_MODEL", "google:gemini-2.0-flash")
 
+# Sarvam AI's chat completions API (https://docs.sarvam.ai) is OpenAI-compatible -
+# it accepts `Authorization: Bearer <key>` and the standard chat/completions
+# request shape - but Pydantic AI has no built-in `sarvam:` provider string
+# like it does for google:/groq:/openai:/anthropic:. So a `sarvam:<model>`
+# value in AGENT_MODEL is resolved here into an explicit OpenAI-compatible
+# model pointed at Sarvam's base URL, instead of being passed straight
+# through to Agent() as a string.
+SARVAM_BASE_URL = os.environ.get("SARVAM_BASE_URL", "https://api.sarvam.ai/v1")
+
+
+def resolve_model():
+    """Turn AGENT_MODEL into whatever Agent() expects: the raw string for
+    providers Pydantic AI knows natively, or an explicit OpenAIChatModel
+    pointed at Sarvam's OpenAI-compatible endpoint for `sarvam:<model>`."""
+    if not AGENT_MODEL.startswith("sarvam:"):
+        return AGENT_MODEL
+
+    from pydantic_ai.models.openai import OpenAIChatModel
+    from pydantic_ai.providers.openai import OpenAIProvider
+
+    model_name = AGENT_MODEL.removeprefix("sarvam:")
+    api_key = os.environ.get("SARVAM_API_KEY")
+    if not api_key:
+        raise RuntimeError("AGENT_MODEL is set to a sarvam: model but SARVAM_API_KEY is not set.")
+    return OpenAIChatModel(model_name, provider=OpenAIProvider(base_url=SARVAM_BASE_URL, api_key=api_key))
+
+
 BUSINESS_TYPE_VALUES = ("vendor", "dairy", "textiles", "retail", "handicrafts", "food_stall")
 DISTRICT_VALUES = ("latur", "sitapur", "indore")
 
@@ -80,7 +107,7 @@ def get_intake_agent() -> Agent:
     before a valid API key is set - only the voice/advisory endpoints need it."""
     global _intake_agent
     if _intake_agent is None:
-        _intake_agent = Agent(AGENT_MODEL, output_type=ConversationTurn, system_prompt=INTAKE_SYSTEM_PROMPT)
+        _intake_agent = Agent(resolve_model(), output_type=ConversationTurn, system_prompt=INTAKE_SYSTEM_PROMPT)
     return _intake_agent
 
 
@@ -111,7 +138,7 @@ _advisory_agent: Agent | None = None
 def get_advisory_agent() -> Agent:
     global _advisory_agent
     if _advisory_agent is None:
-        _advisory_agent = Agent(AGENT_MODEL, output_type=AdvisoryResult, system_prompt=ADVISORY_SYSTEM_PROMPT)
+        _advisory_agent = Agent(resolve_model(), output_type=AdvisoryResult, system_prompt=ADVISORY_SYSTEM_PROMPT)
     return _advisory_agent
 
 
@@ -133,7 +160,7 @@ _feasibility_agent: Agent | None = None
 def get_feasibility_agent() -> Agent:
     global _feasibility_agent
     if _feasibility_agent is None:
-        _feasibility_agent = Agent(AGENT_MODEL, output_type=FeasibilityNarrative, system_prompt=FEASIBILITY_SYSTEM_PROMPT)
+        _feasibility_agent = Agent(resolve_model(), output_type=FeasibilityNarrative, system_prompt=FEASIBILITY_SYSTEM_PROMPT)
     return _feasibility_agent
 
 
@@ -194,7 +221,7 @@ def get_feasibility_advisor_agent() -> Agent:
         get_threats,
     )
 
-    advisor = Agent(AGENT_MODEL, system_prompt=FEASIBILITY_ADVISOR_SYSTEM_PROMPT)
+    advisor = Agent(resolve_model(), system_prompt=FEASIBILITY_ADVISOR_SYSTEM_PROMPT)
 
     def _safe(fn, *args):
         try:
