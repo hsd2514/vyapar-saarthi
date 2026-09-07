@@ -11,6 +11,8 @@ const REQUIRED_FIELDS = ["businessType", "district", "block", "availableMarginCa
 export default function Intake() {
   const { profile, updateProfile, intakeDone, markStepReached } = useAppState();
   const [districts, setDistricts] = useState([]);
+  const [useTypedMode, setUseTypedMode] = useState(false);
+
 
   useEffect(() => {
     api.getCities().then((res) => setDistricts(res.districts)).catch(() => setDistricts([]));
@@ -30,13 +32,26 @@ export default function Intake() {
         description="Talk to Saarthi like you would to a person. It will ask one thing at a time and fill in the answers here. You can also type or change anything yourself."
       />
 
-      <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-6 items-stretch">
-        <VoiceAgent onDone={() => markStepReached(1)} />
+      <div className={`grid gap-6 items-stretch ${useTypedMode ? "max-w-2xl mx-auto" : "lg:grid-cols-[1.1fr_0.9fr]"}`}>
+        {!useTypedMode && (
+          <div className="flex flex-col gap-3">
+            <VoiceAgent onDone={() => markStepReached(1)} />
+            <button onClick={() => setUseTypedMode(true)} className="text-sm font-medium text-pine underline text-center hover:text-pine-dim transition-colors">
+              Type instead (Skip voice agent)
+            </button>
+          </div>
+        )}
 
         <Card>
           <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
-            <h2 className="font-display text-xl font-bold text-ink">Your answers</h2>
-            {intakeDone ? <Badge tone="good">All done</Badge> : <Badge tone="gold">Still asking</Badge>}
+            <h2 className="font-display text-xl font-bold text-ink">{useTypedMode ? "Fill your business details" : "Your answers"}</h2>
+            {useTypedMode ? (
+              <button onClick={() => setUseTypedMode(false)} className="text-sm font-medium text-pine underline hover:text-pine-dim transition-colors">
+                Use voice instead
+              </button>
+            ) : (
+              intakeDone ? <Badge tone="good">All done</Badge> : <Badge tone="gold">Still asking</Badge>
+            )}
           </div>
 
           <div className="space-y-5">
@@ -96,7 +111,7 @@ export default function Intake() {
         </Card>
       </div>
 
-      <StepFooter nextTo="/feasibility" nextDisabled={!isValid} nextLabel="See if it will work here" />
+      <StepFooter nextTo="/feasibility" nextDisabled={!isValid} nextLabel="See if it will work here" onNext={() => markStepReached(1)} />
     </div>
   );
 }
