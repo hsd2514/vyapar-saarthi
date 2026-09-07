@@ -37,14 +37,20 @@ export default function Summary() {
         setStructuring(s);
         setFeasibility(f);
         if (s.scheme) {
-          return api.repaymentSchedule(s.max_loan_amount, s.scheme.annual_rate_pct, s.scheme.tenure_months, s.scheme.moratorium_months);
+          return api.repaymentSchedule(
+            s.max_loan_amount,
+            s.scheme.annual_rate_pct,
+            s.scheme.tenure_months,
+            s.scheme.moratorium_months,
+            Boolean(operations.capitaliseMoratoriumInterest),
+          );
         }
         return null;
       })
       .then((sched) => setSchedule(sched))
       .catch((e) => setError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile.availableMarginCapital, profile.district, profile.block, profile.businessType]);
+  }, [profile.availableMarginCapital, profile.district, profile.block, profile.businessType, operations.capitaliseMoratoriumInterest]);
 
   useEffect(() => {
     if (!schedule || !operations.monthlyOperationalCost) return;

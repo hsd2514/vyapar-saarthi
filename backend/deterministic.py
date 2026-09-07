@@ -111,17 +111,44 @@ def calc_emi(principal: float, annual_rate_pct: float, tenure_months: int) -> fl
     return principal * r * (1 + r) ** n / ((1 + r) ** n - 1)
 
 
-def calc_repayment_schedule(principal: float, annual_rate_pct: float, tenure_months: int, moratorium_months: int) -> dict:
-    """No repayment is due during the moratorium (interest is not
-    capitalised during this window - a stated simplifying assumption, since
-    the PS does not specify capitalisation treatment). EMI is then computed
-    via the standard formula over the remaining (tenure - moratorium)
-    months, and grouped into quarters for display, as the PS asks for a
-    quarterly repayment schedule."""
-    repayment_months = tenure_months - moratorium_months
-    monthly_emi = calc_emi(principal, annual_rate_pct, repayment_months)
+def calc_repayment_schedule(
+    principal: float,
+    annual_rate_pct: float,
+    tenure_months: int,
+    moratorium_months: int,
+    capitalise_moratorium_interest: bool = False,
+) -> dict:
+    """Computes loan repayment schedule with optional moratorium interest capitalisation.
+
+    - Mode 1 (capitalise_moratorium_interest=False): Existing behavior. No repayment or
+      interest is due during the moratorium. EMI is computed on the original principal
+      over the remaining (tenure - moratorium) months.
+    - Mode 2 (capitalise_moratorium_interest=True): Simple interest accrues during the
+      moratorium window (P * annual_rate * moratorium_months / 12) and is added to the
+      principal before calculating the EMI over the remaining tenure.
+    """
+    repayment_months = max(0, tenure_months - moratorium_months)
+    
+    if capitalise_moratorium_interest and moratorium_months > 0 and annual_rate_pct > 0:
+        annual_rate = annual_rate_pct / 100.0
+        moratorium_interest = principal * annual_rate * (moratorium_months / 12.0)
+        effective_principal = principal + moratorium_interest
+    else:
+        moratorium_interest = 0.0
+        effective_principal = principal
+
+    if repayment_months > 0:
+        monthly_emi = calc_emi(effective_principal, annual_rate_pct, repayment_months)
+        baseline_monthly_emi = calc_emi(principal, annual_rate_pct, repayment_months)
+    else:
+        monthly_emi = 0.0
+        baseline_monthly_emi = 0.0
+
     total_repayment = monthly_emi * repayment_months
     total_interest = total_repayment - principal
+    baseline_total_repayment = baseline_monthly_emi * repayment_months
+    emi_difference = monthly_emi - baseline_monthly_emi
+    total_repayment_difference = total_repayment - baseline_total_repayment
 
     quarters = []
     month = 0
@@ -144,17 +171,32 @@ def calc_repayment_schedule(principal: float, annual_rate_pct: float, tenure_mon
         month += months_in_quarter
         quarter_index += 1
 
+    assumption = (
+        "How we worked this out: simple interest accrues during the free moratorium period "
+        "and is added to your principal before EMI calculation begins. The monthly amount is then "
+        "spread evenly over the remaining months."
+        if (capitalise_moratorium_interest and moratorium_months > 0 and annual_rate_pct > 0)
+        else "How we worked this out: you pay nothing during the free period at the start, and no interest is added during it either. The monthly amount is then spread evenly over the months that are left."
+    )
+
     return {
         "principal": principal,
         "annual_rate_pct": annual_rate_pct,
         "tenure_months": tenure_months,
         "moratorium_months": moratorium_months,
         "repayment_months": repayment_months,
+        "capitalise_moratorium_interest": capitalise_moratorium_interest,
+        "moratorium_interest": moratorium_interest,
+        "effective_principal": effective_principal,
+        "baseline_monthly_emi": baseline_monthly_emi,
+        "baseline_total_repayment": baseline_total_repayment,
+        "emi_difference": emi_difference,
+        "total_repayment_difference": total_repayment_difference,
         "monthly_emi": monthly_emi,
         "total_repayment": total_repayment,
         "total_interest": total_interest,
         "quarters": quarters,
-        "assumption": "How we worked this out: you pay nothing during the free period at the start, and no interest is added during it either. The monthly amount is then spread evenly over the months that are left.",
+        "assumption": assumption,
     }
 
 
