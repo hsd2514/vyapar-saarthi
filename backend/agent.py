@@ -189,6 +189,11 @@ FEASIBILITY_ADVISOR_SYSTEM_PROMPT = """You are Saarthi, an expert hyper-local bu
 feasibility advisor for a rural or semi-urban Indian entrepreneur. You are having an ongoing,
 remembered conversation - you can refer back to anything discussed earlier in this session.
 
+The entrepreneur may type in Devanagari script (Hindi/Marathi), Roman-transliterated Hindi/
+Marathi ("yeh area underserved hai kya?"), English, or freely code-mixed between them - answer
+in whatever script or mix they just used, without asking them to switch to English. Numbers and
+place names stay as-is regardless of language.
+
 You have tools to fetch REAL, already-computed deterministic data for any (district, block,
 business_type) combination the three serviced districts support: latur, sitapur, indore.
 Serviced blocks: Latur has Latur, Ausa, Nilanga, Renapur, Chakur. Sitapur has Biswan,
@@ -274,3 +279,80 @@ def get_feasibility_advisor_agent() -> Agent:
 
     _feasibility_advisor_agent = advisor
     return _feasibility_advisor_agent
+
+
+# ---------------------------------------------------------------------------
+# Financial advisor - the same tool-calling, memory-carrying pattern as the
+# feasibility advisor above, but scoped to Module 2 (financial structuring,
+# EMI/moratorium schedule, working capital, and the scheme-matching engine).
+# The PS asks for an NLP-powered advisory assistant across both modules;
+# until this agent existed, Module 2 was a pure calculator screen with no
+# conversational layer at all.
+# ---------------------------------------------------------------------------
+
+FINANCIAL_ADVISOR_SYSTEM_PROMPT = """You are Saarthi, explaining a rural entrepreneur's loan
+structuring, repayment plan, and government scheme matches in an ongoing, remembered
+conversation. Keep answers short, plain-language, and grounded strictly in tool output.
+
+The entrepreneur may type in Devanagari script (Hindi/Marathi), Roman-transliterated Hindi/
+Marathi ("yeh scheme kyu mila?"), English, or freely code-mixed between them - answer in
+whatever script or mix they just used, without asking them to switch to English. Rupee figures,
+scheme names, and numbers stay as-is regardless of language.
+
+Hard rules:
+- ALWAYS call a tool before stating any rupee figure, interest rate, tenure, moratorium, or
+  scheme name. Never state a number from memory - call the tool again for a new margin capital
+  or project cost even if you answered a similar question earlier.
+- If asked "what if I had X instead", call the tools with that new number and be explicit this
+  is a hypothetical, not their actual filing.
+- If asked "why did I get scheme X and not Y", call scheme_match and walk through the actual
+  score_breakdown fields you got back - never invent a reason not present in that output.
+- If something is outside what the tools can answer, say so rather than guessing."""
+
+_financial_advisor_agent: Agent | None = None
+
+
+def get_financial_advisor_agent() -> Agent:
+    global _financial_advisor_agent
+    if _financial_advisor_agent is not None:
+        return _financial_advisor_agent
+
+    from deterministic import calc_financial_structuring, calc_repayment_schedule, calc_working_capital_by_phase
+    from schemes import match_schemes
+
+    advisor = Agent(resolve_model(), system_prompt=FINANCIAL_ADVISOR_SYSTEM_PROMPT)
+
+    def _safe(fn, *args):
+        try:
+            return fn(*args)
+        except ValueError as exc:
+            return {"error": str(exc)}
+
+    @advisor.tool_plain
+    def financial_structuring(available_margin_capital: float) -> dict:
+        """Project cost, max loan amount, and which scheme tier (Micro Finance or Term Loan) this margin capital qualifies for."""
+        return _safe(calc_financial_structuring, available_margin_capital)
+
+    @advisor.tool_plain
+    def repayment_schedule(
+        principal: float,
+        annual_rate_pct: float,
+        tenure_months: int,
+        moratorium_months: int,
+        capitalise_moratorium_interest: bool = False,
+    ) -> dict:
+        """The quarterly EMI/moratorium repayment schedule for a given loan principal, rate, tenure, and moratorium."""
+        return _safe(calc_repayment_schedule, principal, annual_rate_pct, tenure_months, moratorium_months, capitalise_moratorium_interest)
+
+    @advisor.tool_plain
+    def working_capital(monthly_operational_cost: float, inventory_days: float, receivable_days: float, monthly_emi: float) -> dict:
+        """Working capital needed during and after the moratorium, given monthly operating cost, inventory/receivable days, and the EMI."""
+        return _safe(calc_working_capital_by_phase, monthly_operational_cost, inventory_days, receivable_days, monthly_emi)
+
+    @advisor.tool_plain
+    def scheme_match(project_cost: float, business_type: str | None = None) -> list[dict]:
+        """Ranks real government schemes (PMEGP, Mudra tiers, Stand-Up India, PM SVANidhi, PM Vishwakarma, PMFME, dairy scheme) plus this tool's own margin-money scheme against a project cost, with the exact weighted score breakdown for each."""
+        return _safe(match_schemes, project_cost, business_type)
+
+    _financial_advisor_agent = advisor
+    return _financial_advisor_agent

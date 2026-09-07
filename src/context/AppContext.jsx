@@ -29,6 +29,8 @@ const initialState = {
   furthestStep: 0,
   feasibilityChat: [], // [{ role: "agent" | "user", text: string }] - feasibility advisor transcript
   feasibilityChatHistory: [], // raw pydantic-ai message history for the feasibility advisor - its memory
+  financialChat: [], // [{ role: "agent" | "user", text: string }] - financial/scheme advisor transcript (Module 2)
+  financialChatHistory: [], // raw pydantic-ai message history for the financial advisor - its memory
   voiceLanguage: "en-IN", // BCP-47 tag for SpeechRecognition - persisted so it survives a refresh/navigation
 };
 
@@ -46,6 +48,8 @@ function loadInitial() {
       furthestStep: parsed.furthestStep || 0,
       feasibilityChat: parsed.feasibilityChat || [],
       feasibilityChatHistory: parsed.feasibilityChatHistory || [],
+      financialChat: parsed.financialChat || [],
+      financialChatHistory: parsed.financialChatHistory || [],
       voiceLanguage: parsed.voiceLanguage || "en-IN",
     };
   } catch {
@@ -110,6 +114,14 @@ export function AppProvider({ children }) {
     setState((s) => ({ ...s, feasibilityChatHistory: history }));
   }, []);
 
+  const pushFinancialChat = useCallback((entry) => {
+    setState((s) => ({ ...s, financialChat: [...s.financialChat, entry] }));
+  }, []);
+
+  const setFinancialChatHistory = useCallback((history) => {
+    setState((s) => ({ ...s, financialChatHistory: history }));
+  }, []);
+
   const setVoiceLanguage = useCallback((lang) => {
     setState((s) => ({ ...s, voiceLanguage: lang }));
   }, []);
@@ -132,6 +144,8 @@ export function AppProvider({ children }) {
         markStepReached,
         pushFeasibilityChat,
         setFeasibilityChatHistory,
+        pushFinancialChat,
+        setFinancialChatHistory,
         setVoiceLanguage,
         resetAll,
       }}

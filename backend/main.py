@@ -12,7 +12,14 @@ from pydantic import BaseModel
 from pydantic_ai import ModelMessagesTypeAdapter
 from pydantic_ai.messages import ModelMessage
 
-from agent import ConversationTurn, ProfilePatch, get_advisory_agent, get_feasibility_advisor_agent, get_intake_agent
+from agent import (
+    ConversationTurn,
+    ProfilePatch,
+    get_advisory_agent,
+    get_feasibility_advisor_agent,
+    get_financial_advisor_agent,
+    get_intake_agent,
+)
 from city_data import BUSINESS_TYPES, CITY_DATA
 from deterministic import (
     calc_financial_structuring,
@@ -263,6 +270,34 @@ async def feasibility_agent_chat(req: FeasibilityChatRequest):
         return FeasibilityChatResponse(reply_text=result.output, history=new_history)
     except Exception as exc:  # pragma: no cover - surfaced to the UI as a toast
         raise HTTPException(status_code=502, detail=f"Feasibility advisor call failed: {exc}") from exc
+
+
+class FinancialChatRequest(BaseModel):
+    message: str
+    history: list[dict] = []  # raw pydantic-ai message dicts round-tripped from the client - this IS the agent's memory
+
+
+class FinancialChatResponse(BaseModel):
+    reply_text: str
+    history: list[dict]
+
+
+@app.post("/api/financial-advisor/chat", response_model=FinancialChatResponse)
+async def financial_advisor_chat(req: FinancialChatRequest):
+    """A tool-using, memory-carrying conversation scoped to Module 2 (financial
+    structuring, repayment schedule, working capital, scheme matching). The
+    agent calls into deterministic.py and schemes.py itself rather than being
+    handed pre-baked numbers, so it can answer 'what if' and 'why this scheme'
+    questions by actually recomputing, never by guessing."""
+    try:
+        message_history: list[ModelMessage] = (
+            ModelMessagesTypeAdapter.validate_python(req.history) if req.history else []
+        )
+        result = await get_financial_advisor_agent().run(req.message, message_history=message_history)
+        new_history = ModelMessagesTypeAdapter.dump_python(result.all_messages(), mode="json")
+        return FinancialChatResponse(reply_text=result.output, history=new_history)
+    except Exception as exc:  # pragma: no cover - surfaced to the UI as a toast
+        raise HTTPException(status_code=502, detail=f"Financial advisor call failed: {exc}") from exc
 
 
 # ---------------------------------------------------------------------------

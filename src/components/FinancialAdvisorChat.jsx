@@ -1,11 +1,22 @@
+/**
+ * FinancialAdvisorChat — the Module 2 counterpart of FeasibilityAdvisorChat.
+ *
+ * The PS asks for an NLP-powered advisory assistant across both modules, but
+ * until this existed, the financial-structuring / scheme-router screen was a
+ * pure calculator with no conversational layer at all. This gives it one:
+ * a memory-carrying agent that calls the same deterministic functions and
+ * the scheme-matching engine itself, so "what if my margin capital was X"
+ * or "why did I get this scheme and not that one" get real, re-computed
+ * answers instead of a canned explanation.
+ */
 import { useEffect, useRef, useState } from "react";
 import { useAppState } from "../context/AppContext";
 import { api } from "../lib/api";
 import { Button, Badge, Spinner } from "./ui";
 import Markdown from "./Markdown";
 
-export default function FeasibilityAdvisorChat({ district, block, businessType }) {
-  const { feasibilityChat, feasibilityChatHistory, pushFeasibilityChat, setFeasibilityChatHistory } = useAppState();
+export default function FinancialAdvisorChat() {
+  const { financialChat, financialChatHistory, pushFinancialChat, setFinancialChatHistory } = useAppState();
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
   const [error, setError] = useState("");
@@ -13,35 +24,35 @@ export default function FeasibilityAdvisorChat({ district, block, businessType }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [feasibilityChat, thinking]);
+  }, [financialChat, thinking]);
 
   async function send(message) {
     if (!message.trim() || thinking) return;
     setError("");
     setThinking(true);
-    pushFeasibilityChat({ role: "user", text: message });
+    pushFinancialChat({ role: "user", text: message });
     setInput("");
     try {
-      const res = await api.feasibilityChat(message, feasibilityChatHistory, district, block, businessType);
-      setFeasibilityChatHistory(res.history);
-      pushFeasibilityChat({ role: "agent", text: res.reply_text });
+      const res = await api.financialAdvisorChat(message, financialChatHistory);
+      setFinancialChatHistory(res.history);
+      pushFinancialChat({ role: "agent", text: res.reply_text });
     } catch (e) {
-      setError(e.message || "Could not reach the feasibility advisor.");
+      setError(e.message || "Could not reach the financial advisor.");
     } finally {
       setThinking(false);
     }
   }
 
   const suggestions = [
-    "Why does this block read as under-served or competitive?",
-    "What if I picked a different block nearby?",
-    "Which business category would suit me best here?",
+    "Why did I get this scheme and not the other one?",
+    "What if my savings were double this amount?",
+    "How does the free period at the start actually work?",
   ];
 
   return (
     <div className="paper-card rounded-2xl p-5 sm:p-7 flex flex-col h-full min-h-95">
       <div className="flex items-center justify-between mb-3">
-        <p className="font-display text-base font-semibold">Ask Saarthi about this report</p>
+        <p className="font-display text-base font-semibold">Ask Saarthi about your loan and schemes</p>
         <div className="flex gap-2">
           <Badge tone="neutral">Hindi / Marathi / English</Badge>
           <Badge tone="neutral">Remembers this conversation</Badge>
@@ -49,9 +60,9 @@ export default function FeasibilityAdvisorChat({ district, block, businessType }
       </div>
 
       <div ref={scrollRef} className="flex-1 min-h-50 overflow-y-auto scrollbar-thin space-y-3 pr-1 mb-4">
-        {feasibilityChat.length === 0 && !thinking && (
+        {financialChat.length === 0 && !thinking && (
           <div className="space-y-2">
-            <p className="text-sm text-ink-faint mb-3">Ask a follow-up, or try one of these - the agent calls the same real data behind this report to answer, including for other blocks or categories you ask about.</p>
+            <p className="text-sm text-ink-faint mb-3">Ask a follow-up, or try one of these - the agent recomputes your real numbers to answer, including for amounts or schemes you ask "what if" about.</p>
             {suggestions.map((s) => (
               <button
                 key={s}
@@ -63,7 +74,7 @@ export default function FeasibilityAdvisorChat({ district, block, businessType }
             ))}
           </div>
         )}
-        {feasibilityChat.map((entry, i) => (
+        {financialChat.map((entry, i) => (
           <div key={i} className={`flex ${entry.role === "agent" ? "justify-start" : "justify-end"}`}>
             <div
               className={`max-w-[85%] rounded-xl px-4 py-2.5 text-sm leading-relaxed ${
@@ -77,7 +88,7 @@ export default function FeasibilityAdvisorChat({ district, block, businessType }
         {thinking && (
           <div className="flex justify-start">
             <div className="rounded-xl px-4 py-2.5 text-sm bg-pine-tint border border-pine/20 flex items-center gap-2 text-ink-soft">
-              <Spinner className="text-pine" /> Checking the data...
+              <Spinner className="text-pine" /> Working it out...
             </div>
           </div>
         )}

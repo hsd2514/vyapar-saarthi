@@ -6,6 +6,7 @@ import { formatINR } from "../data/constants";
 import { Card, PageHeader, Section, TileGrid, FigureTile, Badge, Spinner } from "../components/ui";
 import FinancingSplitBar from "../components/FinancingSplitBar";
 import GovSchemeMatches from "../components/GovSchemeMatches";
+import FinancialAdvisorChat from "../components/FinancialAdvisorChat";
 import StepFooter from "../components/StepFooter";
 
 export default function FinancialPlan() {
@@ -104,6 +105,10 @@ export default function FinancialPlan() {
           >
             <GovSchemeMatches projectCost={structuring.project_cost} businessType={profile.businessType} />
           </Section>
+
+          <div className="rise-in" style={{ "--rise-delay": "200ms" }}>
+            <FinancialAdvisorChat />
+          </div>
         </div>
       )}
 
