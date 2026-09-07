@@ -191,6 +191,24 @@ def feasibility_compare(district: str, block: str):
     return {"district": district, "block": block, "by_type": by_type}
 
 
+@app.get("/api/feasibility-report/compare-blocks")
+def feasibility_compare_blocks(district: str, business_type: str):
+    """Returns feasibility reports for the same business category across
+    every block in the given district, in one shot. This is the other half
+    of issue #8's "what if" ask - #16's comparison panel covers switching
+    business category for a fixed block; this covers switching block for a
+    fixed business category."""
+    if district not in CITY_DATA:
+        raise HTTPException(status_code=400, detail=f"Unknown district '{district}'")
+    by_block: dict = {}
+    for block_name in CITY_DATA[district]["blocks"]:
+        try:
+            by_block[block_name] = generate_feasibility_report(district, block_name, business_type)
+        except ValueError:
+            by_block[block_name] = None
+    return {"district": district, "business_type": business_type, "by_block": by_block}
+
+
 class FeasibilityChatRequest(BaseModel):
     message: str
     history: list[dict] = []  # raw pydantic-ai message dicts round-tripped from the client - this IS the agent's memory
