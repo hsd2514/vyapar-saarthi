@@ -10,7 +10,7 @@ import BusinessComparisonPanel from "../components/BusinessComparisonPanel";
 import BlockComparisonPanel from "../components/BlockComparisonPanel";
 
 export default function FeasibilityReport() {
-  const { profile, markStepReached } = useAppState();
+  const { profile, markStepReached, t } = useAppState();
   const navigate = useNavigate();
   const [report, setReport] = useState(null);
   const [error, setError] = useState("");
@@ -43,9 +43,9 @@ export default function FeasibilityReport() {
   return (
     <div className="max-w-3xl">
       <PageHeader
-        eyebrow="Step 2 of 5"
-        title={`Will a ${typeLabel?.toLowerCase()} business work in ${profile.block}?`}
-        description="We looked at how many people live near you, how many shops like yours are already there, and what prices are like in your area."
+        eyebrow={t("feasibility.eyebrow")}
+        title={t("feasibility.title", { type: typeLabel?.toLowerCase(), block: profile.block })}
+        description={t("feasibility.description")}
       />
 
       {loading && (
