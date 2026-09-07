@@ -16,13 +16,14 @@ function toBackendProfile(profile) {
 }
 
 export default function VoiceAgent({ onDone }) {
-  const { profile, conversation, agentHistory, pushConversation, setAgentHistory, applyProfilePatch, setIntakeDone } = useAppState();
+  const { profile, conversation, agentHistory, pushConversation, setAgentHistory, applyProfilePatch, setIntakeDone, intakeDone, resetAll } = useAppState();
   const [listening, setListening] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [typedFallback, setTypedFallback] = useState("");
   const [error, setError] = useState("");
   const recognitionRef = useRef(null);
   const scrollRef = useRef(null);
+  const hasStarted = useRef(false);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -30,11 +31,12 @@ export default function VoiceAgent({ onDone }) {
 
   // Kick off the conversation with an opening question if nothing said yet.
   useEffect(() => {
-    if (conversation.length === 0) {
+    if (conversation.length === 0 && !hasStarted.current && !intakeDone) {
+      hasStarted.current = true;
       sendTurn("(start of conversation - greet me and ask your first question)");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [conversation.length, intakeDone]);
 
   function speak(text) {
     if (!("speechSynthesis" in window)) return;
@@ -149,9 +151,16 @@ export default function VoiceAgent({ onDone }) {
   }
 
   return (
-    <div className="paper-card rounded-2xl p-5 sm:p-7 flex flex-col h-full min-h-105">
+    <div className="paper-card rounded-2xl p-5 sm:p-7 flex flex-col h-full min-h-105 relative">
+      {intakeDone && (
+        <div className="mb-4 flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-xl bg-good-tint border-2 border-good/20">
+          <p className="text-[16px] text-ink font-medium">You already finished this. Review your conversation below, or start over if you want to change everything.</p>
+          <Button variant="secondary" onClick={() => { hasStarted.current = false; resetAll(); }}>Start over</Button>
+        </div>
+      )}
+
       <div ref={scrollRef} className="flex-1 min-h-60 overflow-y-auto scrollbar-thin space-y-3 pr-1 mb-5">
-        {conversation.length === 0 && !thinking && (
+        {conversation.length === 0 && !thinking && !intakeDone && (
           <div className="h-full flex flex-col items-center justify-center text-center gap-2 text-ink-faint py-10">
             <MicIcon className="opacity-40 h-8 w-8" />
             <p className="text-[17px]">Saarthi will say hello in a moment.</p>
@@ -181,47 +190,51 @@ export default function VoiceAgent({ onDone }) {
         <div className="mb-4 rounded-lg border border-clay/30 bg-clay-tint px-3.5 py-2.5 text-sm text-[#7a2f14]">{error}</div>
       )}
 
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={toggleListening}
-          disabled={thinking}
-          className={`relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 transition ${
-            listening ? "border-clay bg-clay-tint text-clay" : "border-pine bg-pine-tint text-pine-dim hover:bg-pine/10"
-          } disabled:opacity-50`}
-          aria-label={listening ? "Stop listening" : "Start speaking"}
-        >
-          {listening ? (
-            <div className="flex gap-1 items-end h-6 justify-center w-full">
-              {frequencies.map((f, i) => (
-                <div
-                  key={i}
-                  className="w-1 bg-clay rounded-full transition-all duration-75"
-                  style={{ height: `${Math.max(4, (f / 255) * 24)}px` }}
-                />
-              ))}
+      {!intakeDone && (
+        <>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={toggleListening}
+              disabled={thinking}
+              className={`relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 transition ${
+                listening ? "border-clay bg-clay-tint text-clay" : "border-pine bg-pine-tint text-pine-dim hover:bg-pine/10"
+              } disabled:opacity-50`}
+              aria-label={listening ? "Stop listening" : "Start speaking"}
+            >
+              {listening ? (
+                <div className="flex gap-1 items-end h-6 justify-center w-full">
+                  {frequencies.map((f, i) => (
+                    <div
+                      key={i}
+                      className="w-1 bg-clay rounded-full transition-all duration-75"
+                      style={{ height: `${Math.max(4, (f / 255) * 24)}px` }}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <MicIcon />
+              )}
+            </button>
+            <div className="flex-1 flex items-center gap-2">
+              <input
+                type="text"
+                value={typedFallback}
+                onChange={(e) => setTypedFallback(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && submitTyped()}
+                placeholder={listening ? "Listening to you..." : "Or type your answer"}
+                className="flex-1 rounded-xl border-2 border-line-strong bg-white px-4 py-3 text-[17px] outline-none focus:border-pine focus:ring-4 focus:ring-pine/15"
+              />
+              <Button variant="secondary" onClick={submitTyped} disabled={thinking}>
+                Send
+              </Button>
             </div>
-          ) : (
-            <MicIcon />
-          )}
-        </button>
-        <div className="flex-1 flex items-center gap-2">
-          <input
-            type="text"
-            value={typedFallback}
-            onChange={(e) => setTypedFallback(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && submitTyped()}
-            placeholder={listening ? "Listening to you..." : "Or type your answer"}
-            className="flex-1 rounded-xl border-2 border-line-strong bg-white px-4 py-3 text-[17px] outline-none focus:border-pine focus:ring-4 focus:ring-pine/15"
-          />
-          <Button variant="secondary" onClick={submitTyped} disabled={thinking}>
-            Send
-          </Button>
-        </div>
-      </div>
-      <p className="mt-3 text-[15px] text-ink-soft">
-        Press the button and speak. Saarthi asks one thing at a time, and only writes down what you actually say.
-      </p>
+          </div>
+          <p className="mt-3 text-[15px] text-ink-soft">
+            Press the button and speak. Saarthi asks one thing at a time, and only writes down what you actually say.
+          </p>
+        </>
+      )}
     </div>
   );
 }

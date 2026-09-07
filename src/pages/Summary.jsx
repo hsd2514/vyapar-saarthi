@@ -16,9 +16,15 @@ export default function Summary() {
   const [advisory, setAdvisory] = useState(null);
   const [advisoryLoading, setAdvisoryLoading] = useState(false);
   const [error, setError] = useState("");
+  const [contacts, setContacts] = useState([]);
 
   useEffect(() => {
     if (!profile.availableMarginCapital || !profile.district || !profile.block || !profile.businessType) return;
+    
+    api.getContacts(profile.district, profile.block)
+      .then((res) => setContacts(res.contacts || []))
+      .catch((e) => console.warn("Failed to fetch contacts", e));
+
     Promise.all([
       api.financialStructuring(Number(profile.availableMarginCapital)),
       api.feasibilityReport(profile.district, profile.block, profile.businessType),
@@ -75,6 +81,31 @@ export default function Summary() {
   const typeLabel = BUSINESS_TYPE_LABELS[profile.businessType];
   const today = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" });
 
+  const exportPDF = async () => {
+    try {
+      const { default: html2canvas } = await import("html2canvas");
+      const { jsPDF } = await import("jspdf");
+
+      const element = document.getElementById("pdf-content");
+      if (!element) return;
+
+      const canvas = await html2canvas(element, { scale: 2, useCORS: true });
+      const imgData = canvas.toDataURL("image/png");
+
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "px",
+        format: [canvas.width, canvas.height],
+      });
+
+      pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height);
+      pdf.save("business-plan.pdf");
+    } catch (e) {
+      console.error("PDF generation failed:", e);
+      alert("Could not generate PDF. Please try printing instead.");
+    }
+  };
+
   return (
     <div className="max-w-3xl">
       <div className="flex flex-wrap items-start justify-between gap-4 mb-8 sm:mb-10 no-print">
@@ -83,9 +114,14 @@ export default function Summary() {
           title="Your full plan"
           description="Everything on one page. Print this and take it with you to the bank, the CSC centre, or your SHG group."
         />
-        <Button onClick={() => window.print()} className="mt-1">
-          Print this page
-        </Button>
+        <div className="flex gap-2 mt-1">
+          <Button variant="secondary" onClick={() => window.print()}>
+            Print
+          </Button>
+          <Button onClick={exportPDF}>
+            Save as PDF
+          </Button>
+        </div>
       </div>
 
       {error && <Card className="mb-6 border-clay/30 bg-clay-tint text-clay text-[17px]">Sorry, we could not load this right now. Please check your internet and try again.</Card>}
@@ -93,7 +129,7 @@ export default function Summary() {
       {/* The printed document itself: one continuous sheet, sections
           separated by rules rather than floating cards, which is how a
           real financial report reads on paper. */}
-      <Card className="p-6 sm:p-8">
+      <Card id="pdf-content" className="p-6 sm:p-8">
         <header className="flex flex-wrap items-baseline justify-between gap-2 pb-5 border-b border-line">
           <div>
             <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">My Business Plan</h1>
@@ -195,6 +231,25 @@ export default function Summary() {
                 </li>
               ))}
             </ul>
+          </Section>
+        )}
+
+        {contacts.length > 0 && (
+          <Section title="Where to take this" className="py-6">
+            <p className="text-sm text-ink-soft mb-4">
+              * Note: These are illustrative sample institutions for your block to give you an idea of where to apply. They are not a real live directory.
+            </p>
+            <div className="grid sm:grid-cols-3 gap-4">
+              {contacts.map((c, i) => (
+                <div key={i} className="rounded-xl border border-line p-4 bg-paper-dim">
+                  <div className="mb-2">
+                    <Badge tone="neutral">{c.type}</Badge>
+                  </div>
+                  <p className="font-semibold text-[16px] text-ink mb-1">{c.name}</p>
+                  <p className="text-[14px] text-ink-soft leading-snug">{c.note}</p>
+                </div>
+              ))}
+            </div>
           </Section>
         )}
       </Card>
