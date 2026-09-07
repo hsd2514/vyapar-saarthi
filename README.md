@@ -36,3 +36,13 @@ npm run dev
 Open the printed localhost URL. Voice intake needs a Chromium-based browser
 (Web Speech API); a typed fallback is always available if the mic isn't
 supported.
+
+## Tests
+
+`backend/deterministic.py` holds every financial calculation and rule in
+the app, so it carries the most test coverage in the repo:
+
+```bash
+cd backend
+uv run pytest
+```
