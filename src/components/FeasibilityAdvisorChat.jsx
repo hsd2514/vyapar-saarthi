@@ -42,7 +42,10 @@ export default function FeasibilityAdvisorChat({ district, block, businessType }
     <div className="paper-card rounded-2xl p-5 sm:p-7 flex flex-col h-full min-h-95">
       <div className="flex items-center justify-between mb-3">
         <p className="font-display text-base font-semibold">Ask Saarthi about this report</p>
-        <Badge tone="neutral">Remembers this conversation</Badge>
+        <div className="flex gap-2">
+          <Badge tone="neutral">Hindi / Marathi / English</Badge>
+          <Badge tone="neutral">Remembers this conversation</Badge>
+        </div>
       </div>
 
       <div ref={scrollRef} className="flex-1 min-h-50 overflow-y-auto scrollbar-thin space-y-3 pr-1 mb-4">
@@ -88,7 +91,7 @@ export default function FeasibilityAdvisorChat({ district, block, businessType }
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send(input)}
-          placeholder="Ask about this block, competitors, pricing..."
+          placeholder="Ask in Hindi, Marathi, or English..."
           className="flex-1 rounded-lg border border-line-strong bg-paper px-3.5 py-2.5 text-sm outline-none focus:border-pine focus:ring-4 focus:ring-pine/10"
         />
         <Button variant="secondary" onClick={() => send(input)} disabled={thinking}>
