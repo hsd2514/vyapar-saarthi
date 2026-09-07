@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppState } from "../context/AppContext";
 import { api } from "../lib/api";
@@ -29,20 +29,47 @@ export default function RepaymentPlan() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile.businessType]);
 
+  const isCapitalised = Boolean(operations.capitaliseMoratoriumInterest);
+
   useEffect(() => {
     if (!profile.availableMarginCapital) return;
+    if (structuring?.scheme) {
+      api
+        .repaymentSchedule(
+          structuring.max_loan_amount,
+          structuring.scheme.annual_rate_pct,
+          structuring.scheme.tenure_months,
+          structuring.scheme.moratorium_months,
+          isCapitalised,
+        )
+        .then((sched) => setSchedule(sched))
+        .catch((e) => setError(e.message));
+      return;
+    }
+
     setLoading(true);
     api
       .financialStructuring(Number(profile.availableMarginCapital))
       .then((s) => {
         setStructuring(s);
         if (!s.scheme) return null;
-        return api.repaymentSchedule(s.max_loan_amount, s.scheme.annual_rate_pct, s.scheme.tenure_months, s.scheme.moratorium_months);
+        return api.repaymentSchedule(
+          s.max_loan_amount,
+          s.scheme.annual_rate_pct,
+          s.scheme.tenure_months,
+          s.scheme.moratorium_months,
+          isCapitalised,
+        );
       })
       .then((sched) => setSchedule(sched))
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [profile.availableMarginCapital]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile.availableMarginCapital, isCapitalised]);
+
+  const handleToggleCapitalisation = (enabled) => {
+    updateOperations({ capitaliseMoratoriumInterest: enabled });
+  };
 
   useEffect(() => {
     if (!schedule || !operations.monthlyOperationalCost) return;
@@ -103,6 +130,40 @@ export default function RepaymentPlan() {
       {schedule && (
         <div className="space-y-6">
           <Card className="rise-in">
+            {/* Moratorium Interest Capitalisation Mode Toggle */}
+            <div className="mb-6 p-4 rounded-xl border border-line bg-paper flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[16px] font-bold text-ink">Interest capitalised during moratorium</span>
+                  {schedule.moratorium_months === 0 ? (
+                    <Badge tone="neutral">0-month moratorium</Badge>
+                  ) : isCapitalised ? (
+                    <Badge tone="gold">Capitalised mode</Badge>
+                  ) : (
+                    <Badge tone="pine">Standard mode</Badge>
+                  )}
+                </div>
+                <p className="text-[14px] text-ink-soft leading-snug">
+                  {schedule.moratorium_months === 0
+                    ? "No moratorium period applies for this scheme — both calculation modes produce identical results."
+                    : isCapitalised
+                    ? "Simple interest accrues during the moratorium and is added to principal before repayments start."
+                    : "No interest is added during the free period; repayments are calculated purely on the original loan."}
+                </p>
+              </div>
+              <label className={`relative inline-flex items-center shrink-0 ${schedule.moratorium_months === 0 ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}>
+                <input
+                  type="checkbox"
+                  aria-label="Interest capitalised during moratorium"
+                  className="sr-only peer"
+                  disabled={schedule.moratorium_months === 0}
+                  checked={isCapitalised && schedule.moratorium_months > 0}
+                  onChange={(e) => handleToggleCapitalisation(e.target.checked)}
+                />
+                <div className="w-12 h-6 bg-line-strong peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-pine/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-line after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-pine"></div>
+              </label>
+            </div>
+
             <p className="text-[17px] text-ink-soft">You will pay every month</p>
             <p className="figure text-[44px] sm:text-[56px] font-bold text-ink mt-1">{formatINR(schedule.monthly_emi)}</p>
             <p className="text-[17px] text-ink-soft mt-3 mb-6 leading-relaxed">
@@ -112,14 +173,70 @@ export default function RepaymentPlan() {
             </p>
 
             <TileGrid min="200px">
-              <FigureTile label="Loan you take" value={formatINR(schedule.principal)} />
-              <FigureTile label="Extra you pay as interest" value={formatINR(schedule.total_interest)} tone="gold" />
+              <FigureTile
+                label={isCapitalised && schedule.moratorium_months > 0 ? "Effective principal to repay" : "Loan you take"}
+                value={formatINR(isCapitalised && schedule.moratorium_months > 0 ? schedule.effective_principal : schedule.principal)}
+                note={isCapitalised && schedule.moratorium_months > 0 ? `Original loan: ${formatINR(schedule.principal)}` : undefined}
+              />
+              <FigureTile
+                label="Extra you pay as interest"
+                value={formatINR(schedule.total_interest)}
+                tone="gold"
+                note={isCapitalised && schedule.moratorium_months > 0 ? `Includes ${formatINR(schedule.moratorium_interest)} moratorium interest` : undefined}
+              />
               <FigureTile
                 label="Total you give back"
                 value={formatINR(schedule.total_repayment)}
                 note="loan plus interest, over the full time"
               />
             </TileGrid>
+
+            {/* Capitalisation Audit & Impact Explanation */}
+            {isCapitalised && schedule.moratorium_months > 0 && (
+              <div className="my-6 p-5 rounded-2xl border-2 border-gold/40 bg-gold-tint/40 space-y-4">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">📊</span>
+                    <h4 className="font-display font-bold text-[17px] text-ink">Moratorium Capitalisation Impact</h4>
+                  </div>
+                  <Badge tone="gold">Formula: P + (P × r × M/12)</Badge>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-left">
+                  <div className="p-3 bg-white rounded-xl border border-gold/30">
+                    <span className="text-[13px] text-ink-soft block font-medium">Original loan (P)</span>
+                    <span className="text-[18px] font-bold text-ink figure">{formatINR(schedule.principal)}</span>
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border border-gold/30">
+                    <span className="text-[13px] text-ink-soft block font-medium">Moratorium interest ({schedule.moratorium_months} mos)</span>
+                    <span className="text-[18px] font-bold text-gold figure">+{formatINR(schedule.moratorium_interest)}</span>
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border border-gold/30">
+                    <span className="text-[13px] text-ink-soft block font-medium">Capitalised principal (Pm)</span>
+                    <span className="text-[18px] font-bold text-ink figure">{formatINR(schedule.effective_principal)}</span>
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border border-gold/30">
+                    <span className="text-[13px] text-ink-soft block font-medium">Monthly EMI increase</span>
+                    <span className="text-[18px] font-bold text-clay figure">
+                      +{formatINR(schedule.emi_difference)}/mo
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-[14px] text-ink-soft leading-relaxed pt-2 border-t border-gold/30 space-y-1">
+                  <p>
+                    <b className="text-ink">Why is this higher?</b> Simple interest of{" "}
+                    <strong className="text-ink">{formatINR(schedule.moratorium_interest)}</strong> accrued at {schedule.annual_rate_pct}% p.a. over the {schedule.moratorium_months}-month grace period.
+                    It was added to your balance, increasing your effective principal to <strong className="text-ink">{formatINR(schedule.effective_principal)}</strong>.
+                  </p>
+                  {schedule.total_repayment_difference > 0 && (
+                    <p>
+                      Overall, you will pay <strong className="text-ink">{formatINR(schedule.total_repayment_difference)}</strong> more in total over the full {schedule.repayment_months}-month repayment window compared to the non-capitalised mode ({formatINR(schedule.total_repayment)} vs {formatINR(schedule.baseline_total_repayment)}).
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
 
             <p className="mt-7 mb-3 text-[17px] font-semibold text-ink">Every three months, this is what is due</p>
             <div className="space-y-2">

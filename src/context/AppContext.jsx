@@ -17,6 +17,7 @@ const defaultOperations = {
   monthlyOperationalCost: "",
   inventoryDays: "",
   receivableDays: "",
+  capitaliseMoratoriumInterest: false,
 };
 
 const initialState = {
