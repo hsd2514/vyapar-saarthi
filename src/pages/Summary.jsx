@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppState } from "../context/AppContext";
 import { api } from "../lib/api";
@@ -17,6 +17,10 @@ export default function Summary() {
   const [advisoryLoading, setAdvisoryLoading] = useState(false);
   const [error, setError] = useState("");
   const [contacts, setContacts] = useState([]);
+
+  // Share link state
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareToast, setShareToast] = useState(""); // "" | "copied" | "error"
 
   useEffect(() => {
     if (!profile.availableMarginCapital || !profile.district || !profile.block || !profile.businessType) return;
@@ -67,6 +71,38 @@ export default function Summary() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [structuring, feasibility, schedule, workingCapital]);
 
+  const handleCopyShareLink = useCallback(async () => {
+    if (!structuring || !feasibility) return; // button is disabled until data is ready
+    setShareLoading(true);
+    setShareToast("");
+    try {
+      const result = await api.shareCreate({
+        profile: {
+          businessType: profile.businessType,
+          district: profile.district,
+          block: profile.block,
+          village: profile.village || "",
+          availableMarginCapital: profile.availableMarginCapital,
+        },
+        operations,
+        structuring,
+        schedule,
+        working_capital: workingCapital,
+        feasibility,
+        advisory,
+        contacts,
+      });
+      await navigator.clipboard.writeText(result.share_url);
+      setShareToast("copied");
+    } catch (e) {
+      console.error("Share failed:", e);
+      setShareToast("error");
+    } finally {
+      setShareLoading(false);
+      setTimeout(() => setShareToast(""), 3500);
+    }
+  }, [structuring, feasibility, schedule, workingCapital, advisory, contacts, profile, operations]);
+
   if (!profile.businessType) {
     return (
       <Card className="max-w-3xl text-center py-14">
@@ -106,6 +142,8 @@ export default function Summary() {
     }
   };
 
+  const shareReady = !!(structuring && feasibility);
+
   return (
     <div className="max-w-3xl">
       <div className="flex flex-wrap items-start justify-between gap-4 mb-8 sm:mb-10 no-print">
@@ -114,7 +152,32 @@ export default function Summary() {
           title="Your full plan"
           description="Everything on one page. Print this and take it with you to the bank, the CSC centre, or your SHG group."
         />
-        <div className="flex gap-2 mt-1">
+        <div className="flex flex-wrap gap-2 mt-1 items-center">
+          {/* Share toast feedback */}
+          {shareToast === "copied" && (
+            <span className="text-[15px] font-semibold text-good-dim animate-fade-in">✓ Link copied!</span>
+          )}
+          {shareToast === "error" && (
+            <span className="text-[15px] font-semibold text-clay animate-fade-in">Could not copy link.</span>
+          )}
+
+          <Button
+            id="share-link-btn"
+            variant="secondary"
+            onClick={handleCopyShareLink}
+            disabled={!shareReady || shareLoading}
+            title={shareReady ? "Copy a shareable read-only link to this plan" : "Wait for plan data to load first"}
+          >
+            {shareLoading ? <Spinner className="text-pine" /> : (
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                <polyline points="16 6 12 2 8 6" />
+                <line x1="12" y1="2" x2="12" y2="15" />
+              </svg>
+            )}
+            Share
+          </Button>
+
           <Button variant="secondary" onClick={() => window.print()}>
             Print
           </Button>

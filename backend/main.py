@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+import secrets
+import time
+from contextlib import asynccontextmanager
+from typing import Any
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -15,7 +21,36 @@ from deterministic import (
     generate_feasibility_report,
 )
 
-app = FastAPI(title="Vyapar Saarthi API")
+# ---------------------------------------------------------------------------
+# In-memory share store
+# Each entry: { "payload": dict, "created_at": float (unix timestamp) }
+# Lifetime: 24 hours; cleaned up every 30 minutes by the background task.
+# Cleared on server restart — this is intentional for the demo; see README.
+# ---------------------------------------------------------------------------
+
+_SHARE_STORE: dict[str, dict[str, Any]] = {}
+_SHARE_TTL_SECONDS = 24 * 60 * 60  # 24 hours
+_CLEANUP_INTERVAL_SECONDS = 30 * 60  # 30 minutes
+
+
+async def _cleanup_expired_shares() -> None:
+    """Background task: remove share entries older than _SHARE_TTL_SECONDS."""
+    while True:
+        await asyncio.sleep(_CLEANUP_INTERVAL_SECONDS)
+        cutoff = time.time() - _SHARE_TTL_SECONDS
+        expired = [sid for sid, entry in _SHARE_STORE.items() if entry["created_at"] < cutoff]
+        for sid in expired:
+            _SHARE_STORE.pop(sid, None)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(_cleanup_expired_shares())
+    yield
+    task.cancel()
+
+
+app = FastAPI(title="Vyapar Saarthi API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -228,6 +263,77 @@ def get_contacts(district: str, block: str):
     if not b:
         raise HTTPException(status_code=400, detail="Unknown district or block")
     return {"contacts": b.get("contacts", [])}
+
+
+# ---------------------------------------------------------------------------
+# Shareable read-only summary link
+#
+# Storage: in-memory Python dict. Cleared on server restart (intentional for
+# demo). Entries expire after 24 hours; a background task prunes them every
+# 30 minutes.
+#
+# Known limitations (out of scope for this demo):
+#  - No authentication: anyone with the URL can read the plan.
+#  - No real persistence: restarting the server invalidates all links.
+#  - No PII hardening: the payload contains financial details the user typed.
+# ---------------------------------------------------------------------------
+
+class SharePayload(BaseModel):
+    """The compiled summary snapshot sent by the frontend when creating a link."""
+    profile: dict
+    operations: dict
+    structuring: dict | None = None
+    schedule: dict | None = None
+    working_capital: dict | None = None
+    feasibility: dict | None = None
+    advisory: dict | None = None
+    contacts: list = []
+
+
+class ShareCreateResponse(BaseModel):
+    share_id: str
+    share_url: str
+    expires_at: float  # Unix timestamp
+
+
+@app.post("/api/summary/share", response_model=ShareCreateResponse)
+def create_share(payload: SharePayload, frontend_origin: str = "http://localhost:5173"):
+    """
+    Store the compiled summary payload and return a shareable link.
+
+    The link is valid for 24 hours from creation. Data is stored in memory
+    and will be lost if the server restarts (acceptable for a demo).
+    """
+    share_id = secrets.token_urlsafe(8)
+    created_at = time.time()
+    expires_at = created_at + _SHARE_TTL_SECONDS
+    _SHARE_STORE[share_id] = {
+        "payload": payload.model_dump(),
+        "created_at": created_at,
+        "expires_at": expires_at,
+    }
+    # The shareable URL uses the HashRouter fragment format (#/view/<id>)
+    share_url = f"{frontend_origin}/#/view/{share_id}"
+    return ShareCreateResponse(share_id=share_id, share_url=share_url, expires_at=expires_at)
+
+
+@app.get("/api/summary/share/{share_id}")
+def get_share(share_id: str):
+    """
+    Retrieve a previously stored summary snapshot by its share ID.
+    Returns 404 if the ID is unknown or has expired and been cleaned up.
+    """
+    entry = _SHARE_STORE.get(share_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Share link not found or has expired.")
+    # Lazy expiry check (safety net in case cleanup hasn't run yet)
+    if time.time() > entry["expires_at"]:
+        _SHARE_STORE.pop(share_id, None)
+        raise HTTPException(status_code=404, detail="Share link has expired.")
+    return {
+        **entry["payload"],
+        "expires_at": entry["expires_at"],
+    }
 
 
 @app.get("/api/health")
