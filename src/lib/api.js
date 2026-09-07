@@ -59,6 +59,9 @@ export const api = {
   feasibilityCompare: (district, block) =>
     request(`/api/feasibility-report/compare?district=${encodeURIComponent(district)}&block=${encodeURIComponent(block)}`),
 
+  feasibilityCompareBlocks: (district, businessType) =>
+    request(`/api/feasibility-report/compare-blocks?district=${encodeURIComponent(district)}&business_type=${encodeURIComponent(businessType)}`),
+
   feasibilityChat: (message, history, district, block, businessType) =>
     request("/api/feasibility-agent/chat", {
       method: "POST",

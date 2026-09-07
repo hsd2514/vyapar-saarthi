@@ -7,6 +7,7 @@ import { Card, PageHeader, Section, TileGrid, FigureTile, Badge, Spinner } from 
 import StepFooter from "../components/StepFooter";
 import FeasibilityAdvisorChat from "../components/FeasibilityAdvisorChat";
 import BusinessComparisonPanel from "../components/BusinessComparisonPanel";
+import BlockComparisonPanel from "../components/BlockComparisonPanel";
 
 export default function FeasibilityReport() {
   const { profile, markStepReached } = useAppState();
@@ -143,6 +144,12 @@ export default function FeasibilityReport() {
             district={profile.district}
             block={profile.block}
             chosenType={profile.businessType}
+          />
+
+          <BlockComparisonPanel
+            district={profile.district}
+            block={profile.block}
+            businessType={profile.businessType}
           />
 
           <FeasibilityAdvisorChat district={profile.district} block={profile.block} businessType={profile.businessType} />

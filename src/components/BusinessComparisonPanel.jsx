@@ -17,12 +17,12 @@ import { formatCount } from "../data/constants";
 
 /* Ordered list of all 6 categories with display metadata */
 const CATEGORY_META = {
-  vendor:      { label: "Vegetables & Fruits",  icon: "??" },
-  dairy:       { label: "Milk & Dairy",          icon: "??" },
-  textiles:    { label: "Textiles & Tailoring",  icon: "??" },
-  retail:      { label: "Kirana / Retail Shop",  icon: "??" },
-  handicrafts: { label: "Handicrafts",           icon: "??" },
-  food_stall:  { label: "Food Stall / Snacks",   icon: "??" },
+  vendor:      { label: "Vegetables & Fruits",  icon: "🥬" },
+  dairy:       { label: "Milk & Dairy",          icon: "🥛" },
+  textiles:    { label: "Textiles & Tailoring",  icon: "🧵" },
+  retail:      { label: "Kirana / Retail Shop",  icon: "🏪" },
+  handicrafts: { label: "Handicrafts",           icon: "🎨" },
+  food_stall:  { label: "Food Stall / Snacks",   icon: "🍲" },
 };
 
 export default function BusinessComparisonPanel({ district, block, chosenType }) {
@@ -51,14 +51,14 @@ export default function BusinessComparisonPanel({ district, block, chosenType })
         .filter(([, r]) => r !== null)
         .map(([key, r]) => ({
           key,
-          meta: CATEGORY_META[key] || { label: key, icon: "??" },
+          meta: CATEGORY_META[key] || { label: key, icon: "🏷️" },
           consumers: r.market_reach.addressable_consumers,
           competitors: r.competitor_mapping.competitor_count,
           consumersPerComp: r.competitor_mapping.addressable_consumers_per_competitor,
           isUnderserved: r.opportunity_analysis.is_underserved,
           seasonalPeak: r.threats.seasonal_peak,
           entryPrice: r.product_market_value
-            ? `?${r.product_market_value.suggested_entry_price.toFixed(0)} / ${r.product_market_value.unit}`
+            ? `₹${r.product_market_value.suggested_entry_price.toFixed(0)} / ${r.product_market_value.unit}`
             : "—",
         }))
         .sort((a, b) => b.consumersPerComp - a.consumersPerComp)
@@ -76,7 +76,7 @@ export default function BusinessComparisonPanel({ district, block, chosenType })
       >
         <div className="flex items-center gap-3">
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-pine-tint text-[22px]">
-            ??
+            ⚖️
           </span>
           <div>
             <p className="text-[17px] font-bold text-ink leading-tight">
@@ -136,7 +136,7 @@ export default function BusinessComparisonPanel({ district, block, chosenType })
               </div>
 
               <p className="mt-3 text-[13px] text-ink-faint leading-snug">
-                ? Sorted by customers per existing shop (highest opportunity first). Numbers are based on local block data — your actual results will depend on your own effort and timing.
+                Sorted by customers per existing shop (highest opportunity first). Numbers are based on local block data - your actual results will depend on your own effort and timing.
               </p>
             </>
           )}
@@ -169,12 +169,12 @@ function ComparisonRow({ row, isChosen, isTop, isLast }) {
             )}
             {isTop && !isChosen && (
               <span className="inline-flex items-center rounded-full bg-good px-2 py-0.5 text-[11px] font-bold text-white">
-                ?? Top pick
+                ⭐ Top pick
               </span>
             )}
             {isTop && isChosen && (
               <span className="inline-flex items-center rounded-full bg-good px-2 py-0.5 text-[11px] font-bold text-white">
-                ?? Best here
+                ⭐ Best here
               </span>
             )}
           </div>
