@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { translate } from "../lib/i18n";
 
 const STORAGE_KEY = "vyapar-saarthi-margin-v1";
 
@@ -30,6 +31,7 @@ const initialState = {
   feasibilityChat: [], // [{ role: "agent" | "user", text: string }] - feasibility advisor transcript
   feasibilityChatHistory: [], // raw pydantic-ai message history for the feasibility advisor - its memory
   voiceLanguage: "en-IN", // BCP-47 tag for SpeechRecognition - persisted so it survives a refresh/navigation
+  uiLanguage: "en", // "en" | "hi" | "mr" - the app chrome's own display language, independent of voiceLanguage
 };
 
 function loadInitial() {
@@ -47,6 +49,7 @@ function loadInitial() {
       feasibilityChat: parsed.feasibilityChat || [],
       feasibilityChatHistory: parsed.feasibilityChatHistory || [],
       voiceLanguage: parsed.voiceLanguage || "en-IN",
+      uiLanguage: parsed.uiLanguage || "en",
     };
   } catch {
     return initialState;
@@ -114,6 +117,12 @@ export function AppProvider({ children }) {
     setState((s) => ({ ...s, voiceLanguage: lang }));
   }, []);
 
+  const setUiLanguage = useCallback((lang) => {
+    setState((s) => ({ ...s, uiLanguage: lang }));
+  }, []);
+
+  const t = useCallback((key, vars) => translate(state.uiLanguage, key, vars), [state.uiLanguage]);
+
   const resetAll = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
     setState(initialState);
@@ -133,6 +142,8 @@ export function AppProvider({ children }) {
         pushFeasibilityChat,
         setFeasibilityChatHistory,
         setVoiceLanguage,
+        setUiLanguage,
+        t,
         resetAll,
       }}
     >

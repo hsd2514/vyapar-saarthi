@@ -7,7 +7,7 @@ import { Card, PageHeader, Section, TileGrid, FigureTile, Badge, StatRow, Button
 import FinancingSplitBar from "../components/FinancingSplitBar";
 
 export default function Summary() {
-  const { profile, operations, resetAll } = useAppState();
+  const { profile, operations, resetAll, t } = useAppState();
   const navigate = useNavigate();
   const [structuring, setStructuring] = useState(null);
   const [schedule, setSchedule] = useState(null);
@@ -154,9 +154,9 @@ export default function Summary() {
     <div className="max-w-3xl">
       <div className="flex flex-wrap items-start justify-between gap-4 mb-8 sm:mb-10 no-print">
         <PageHeader
-          eyebrow="Step 5 of 5"
-          title="Your full plan"
-          description="Everything on one page. Print this and take it with you to the bank, the CSC centre, or your SHG group."
+          eyebrow={t("summary.eyebrow")}
+          title={t("summary.title")}
+          description={t("summary.description")}
         />
         <div className="flex flex-wrap gap-2 mt-1 items-center">
           {/* Share toast feedback */}

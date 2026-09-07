@@ -9,7 +9,7 @@ import GovSchemeMatches from "../components/GovSchemeMatches";
 import StepFooter from "../components/StepFooter";
 
 export default function FinancialPlan() {
-  const { profile, markStepReached } = useAppState();
+  const { profile, markStepReached, t } = useAppState();
   const navigate = useNavigate();
   const [structuring, setStructuring] = useState(null);
   const [error, setError] = useState("");
@@ -41,9 +41,9 @@ export default function FinancialPlan() {
   return (
     <div className="max-w-3xl">
       <PageHeader
-        eyebrow="Step 3 of 5"
-        title="How much money you can get"
-        description="For every ₹10 the business needs, you put in ₹1 and the government scheme lends the other ₹9. How big your business is decides which scheme you get."
+        eyebrow={t("financial.eyebrow")}
+        title={t("financial.title")}
+        description={t("financial.description")}
       />
 
       {loading && (
