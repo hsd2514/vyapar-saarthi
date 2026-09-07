@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAppState } from "../context/AppContext";
 import { api } from "../lib/api";
 import { Button, Badge, Spinner } from "./ui";
+import Markdown from "./Markdown";
 
 const SpeechRecognitionCtor = typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
 
@@ -51,7 +52,10 @@ export default function VoiceAgent({ onDone }) {
   function speak(text) {
     if (!("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
+    // Strip markdown syntax before speaking it aloud - otherwise "**one lakh**"
+    // gets read out as "asterisk asterisk one lakh asterisk asterisk".
+    const spoken = text.replace(/[*_`#]+/g, "").replace(/^-\s+/gm, "");
+    const utter = new SpeechSynthesisUtterance(spoken);
     utter.lang = voiceLanguage;
     utter.rate = 1;
     utter.pitch = 1;
@@ -184,7 +188,7 @@ export default function VoiceAgent({ onDone }) {
                 entry.role === "agent" ? "bg-pine-tint text-ink border border-pine/20" : "bg-paper-dim text-ink border border-line"
               }`}
             >
-              {entry.text}
+              {entry.role === "agent" ? <Markdown>{entry.text}</Markdown> : entry.text}
             </div>
           </div>
         ))}

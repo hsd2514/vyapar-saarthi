@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAppState } from "../context/AppContext";
 import { api } from "../lib/api";
 import { Button, Badge, Spinner } from "./ui";
+import Markdown from "./Markdown";
 
 export default function FeasibilityAdvisorChat({ district, block, businessType }) {
   const { feasibilityChat, feasibilityChatHistory, pushFeasibilityChat, setFeasibilityChatHistory } = useAppState();
@@ -66,7 +67,7 @@ export default function FeasibilityAdvisorChat({ district, block, businessType }
                 entry.role === "agent" ? "bg-pine-tint text-ink border border-pine/20" : "bg-paper-dim text-ink border border-line"
               }`}
             >
-              {entry.text}
+              {entry.role === "agent" ? <Markdown>{entry.text}</Markdown> : entry.text}
             </div>
           </div>
         ))}
