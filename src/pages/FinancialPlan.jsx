@@ -5,6 +5,7 @@ import { api } from "../lib/api";
 import { formatINR } from "../data/constants";
 import { Card, PageHeader, Section, TileGrid, FigureTile, Badge, Spinner } from "../components/ui";
 import FinancingSplitBar from "../components/FinancingSplitBar";
+import GovSchemeMatches from "../components/GovSchemeMatches";
 import StepFooter from "../components/StepFooter";
 
 export default function FinancialPlan() {
@@ -94,6 +95,14 @@ export default function FinancialPlan() {
                 <p>Try starting with a smaller business, or ask your bank about other loans.</p>
               </div>
             )}
+          </Section>
+
+          <Section
+            title="All the government schemes that could fund this"
+            className="rise-in"
+            style={{ "--rise-delay": "140ms" }}
+          >
+            <GovSchemeMatches projectCost={structuring.project_cost} businessType={profile.businessType} />
           </Section>
         </div>
       )}

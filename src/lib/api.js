@@ -74,6 +74,13 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
+  schemeMatch: (projectCost, businessType) =>
+    request(
+      `/api/scheme-match?project_cost=${encodeURIComponent(projectCost)}${
+        businessType ? `&business_type=${encodeURIComponent(businessType)}` : ""
+      }`
+    ),
+
   getContacts: (district, block) =>
     request(`/api/contacts?district=${encodeURIComponent(district)}&block=${encodeURIComponent(block)}`),
 

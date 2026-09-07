@@ -25,7 +25,14 @@ const CATEGORY_META = {
   food_stall:  { label: "Food Stall / Snacks",   icon: "🍲" },
 };
 
-export default function BusinessComparisonPanel({ district, block, chosenType }) {
+// Rough, clearly-labelled affordability heuristic: can the margin capital
+// comfortably cover roughly 20 units of opening stock at this category's
+// suggested entry price? This is a heuristic proxy, not a scheme rule -
+// it only nudges the "best pick" between categories with similar demand,
+// it never overrides a category that is clearly the stronger market fit.
+const STOCK_UNITS_ASSUMED = 20;
+
+export default function BusinessComparisonPanel({ district, block, chosenType, marginCapital = 0 }) {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -57,6 +64,7 @@ export default function BusinessComparisonPanel({ district, block, chosenType })
           consumersPerComp: r.competitor_mapping.addressable_consumers_per_competitor,
           isUnderserved: r.opportunity_analysis.is_underserved,
           seasonalPeak: r.threats.seasonal_peak,
+          rawEntryPrice: r.product_market_value?.suggested_entry_price ?? null,
           entryPrice: r.product_market_value
             ? `₹${r.product_market_value.suggested_entry_price.toFixed(0)} / ${r.product_market_value.unit}`
             : "—",
@@ -64,7 +72,21 @@ export default function BusinessComparisonPanel({ district, block, chosenType })
         .sort((a, b) => b.consumersPerComp - a.consumersPerComp)
     : [];
 
-  const topKey = rows[0]?.key;
+  // Recommended pick: demand (consumers per competitor) is the primary
+  // signal, same as the table's own sort order; when margin capital is
+  // known, break close ties in favour of the category whose opening stock
+  // is comfortably affordable within it.
+  const maxConsumersPerComp = Math.max(1, ...rows.map((r) => r.consumersPerComp));
+  const bestPick = rows.length
+    ? rows.reduce((best, r) => {
+        const demandScore = r.consumersPerComp / maxConsumersPerComp; // 0-1
+        const affordable = marginCapital > 0 && r.rawEntryPrice ? marginCapital >= r.rawEntryPrice * STOCK_UNITS_ASSUMED : true;
+        const blended = demandScore + (affordable ? 0.15 : 0); // small nudge, never flips a clear demand leader
+        return !best || blended > best.blended ? { ...r, blended, affordable } : best;
+      }, null)
+    : null;
+
+  const topKey = bestPick?.key;
 
   return (
     <div className="mt-8 border-t border-line pt-6">
@@ -138,6 +160,12 @@ export default function BusinessComparisonPanel({ district, block, chosenType })
               <p className="mt-3 text-[13px] text-ink-faint leading-snug">
                 Sorted by customers per existing shop (highest opportunity first). Numbers are based on local block data - your actual results will depend on your own effort and timing.
               </p>
+
+              {bestPick && marginCapital > 0 && (
+                <p className="mt-2 text-[13px] text-ink-faint leading-snug">
+                  Top pick factors in your saved amount too: {bestPick.affordable ? "your savings comfortably cover opening stock for this category" : "opening stock here would stretch your savings - demand is still the strongest signal"}.
+                </p>
+              )}
             </>
           )}
         </div>
