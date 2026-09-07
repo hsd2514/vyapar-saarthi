@@ -1,4 +1,5 @@
 import Stepper from "./Stepper";
+import GlobalAgentBar from "./GlobalAgentBar";
 import { useAppState } from "../context/AppContext";
 
 export default function Layout({ children }) {
@@ -14,6 +15,7 @@ export default function Layout({ children }) {
           </div>
         </footer>
       </div>
+      <GlobalAgentBar />
     </div>
   );
 }
