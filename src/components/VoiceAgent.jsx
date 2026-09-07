@@ -68,23 +68,70 @@ export default function VoiceAgent({ onDone }) {
     }
   }
 
-  function toggleListening() {
+  const audioCtxRef = useRef(null);
+  const analyserRef = useRef(null);
+  const mediaStreamRef = useRef(null);
+  const rafRef = useRef(null);
+  const [frequencies, setFrequencies] = useState([0, 0, 0, 0, 0]);
+
+  function stopVisualizer() {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+    }
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close().catch(() => {});
+    }
+    setFrequencies([0, 0, 0, 0, 0]);
+  }
+
+  async function toggleListening() {
     if (!SpeechRecognitionCtor) {
       setError("Speech recognition isn't supported in this browser - use the text box below instead.");
       return;
     }
     if (listening) {
       recognitionRef.current?.stop();
+      stopVisualizer();
       return;
     }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      audioCtxRef.current = audioCtx;
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      analyserRef.current = analyser;
+      const source = audioCtx.createMediaStreamSource(stream);
+      source.connect(analyser);
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const updateVolume = () => {
+        if (!analyserRef.current) return;
+        analyserRef.current.getByteFrequencyData(dataArray);
+        // sample 5 frequency bands
+        setFrequencies([dataArray[5], dataArray[15], dataArray[25], dataArray[35], dataArray[45]]);
+        rafRef.current = requestAnimationFrame(updateVolume);
+      };
+      updateVolume();
+    } catch (err) {
+      console.warn("Could not start audio visualizer", err);
+    }
+
     const recognition = new SpeechRecognitionCtor();
     recognition.lang = "en-IN";
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
     recognition.onstart = () => setListening(true);
-    recognition.onend = () => setListening(false);
+    recognition.onend = () => {
+      setListening(false);
+      stopVisualizer();
+    };
     recognition.onerror = (e) => {
       setListening(false);
+      stopVisualizer();
       setError(`Mic error: ${e.error}`);
     };
     recognition.onresult = (event) => {
@@ -139,12 +186,24 @@ export default function VoiceAgent({ onDone }) {
           type="button"
           onClick={toggleListening}
           disabled={thinking}
-          className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 transition ${
-            listening ? "border-clay bg-clay-tint text-clay animate-pulse" : "border-pine bg-pine-tint text-pine-dim hover:bg-pine/10"
+          className={`relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 transition ${
+            listening ? "border-clay bg-clay-tint text-clay" : "border-pine bg-pine-tint text-pine-dim hover:bg-pine/10"
           } disabled:opacity-50`}
           aria-label={listening ? "Stop listening" : "Start speaking"}
         >
-          <MicIcon />
+          {listening ? (
+            <div className="flex gap-1 items-end h-6 justify-center w-full">
+              {frequencies.map((f, i) => (
+                <div
+                  key={i}
+                  className="w-1 bg-clay rounded-full transition-all duration-75"
+                  style={{ height: `${Math.max(4, (f / 255) * 24)}px` }}
+                />
+              ))}
+            </div>
+          ) : (
+            <MicIcon />
+          )}
         </button>
         <div className="flex-1 flex items-center gap-2">
           <input
