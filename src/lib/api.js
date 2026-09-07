@@ -68,6 +68,12 @@ export const api = {
       body: JSON.stringify({ message, history, district, block, business_type: businessType }),
     }),
 
+  financialAdvisorChat: (message, history) =>
+    request("/api/financial-advisor/chat", {
+      method: "POST",
+      body: JSON.stringify({ message, history }),
+    }),
+
   advisory: (payload) =>
     request("/api/advisory", {
       method: "POST",
