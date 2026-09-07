@@ -1,5 +1,5 @@
 /**
- * BusinessComparisonPanel — "Which business suits me best here?"
+ * BusinessComparisonPanel â€” "Which business suits me best here?"
  *
  * An optional, exploratory panel that appears at the bottom of FeasibilityReport.jsx.
  * It is collapsed by default and only fetches data when the user first expands it,
@@ -59,7 +59,7 @@ export default function BusinessComparisonPanel({ district, block, chosenType })
           seasonalPeak: r.threats.seasonal_peak,
           entryPrice: r.product_market_value
             ? `?${r.product_market_value.suggested_entry_price.toFixed(0)} / ${r.product_market_value.unit}`
-            : "—",
+            : "â€”",
         }))
         .sort((a, b) => b.consumersPerComp - a.consumersPerComp)
     : [];
@@ -96,7 +96,7 @@ export default function BusinessComparisonPanel({ district, block, chosenType })
 
           {error && (
             <div className="rounded-xl border border-clay/30 bg-clay-tint px-5 py-4 text-[16px] text-clay">
-              Could not load comparison data — please check your connection.
+              Could not load comparison data â€” please check your connection.
             </div>
           )}
 
@@ -136,7 +136,7 @@ export default function BusinessComparisonPanel({ district, block, chosenType })
               </div>
 
               <p className="mt-3 text-[13px] text-ink-faint leading-snug">
-                ? Sorted by customers per existing shop (highest opportunity first). Numbers are based on local block data — your actual results will depend on your own effort and timing.
+                ? Sorted by customers per existing shop (highest opportunity first). Numbers are based on local block data â€” your actual results will depend on your own effort and timing.
               </p>
             </>
           )}
