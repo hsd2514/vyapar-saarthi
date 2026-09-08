@@ -17,6 +17,8 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator
 from pydantic_ai import Agent
 
+from city_data import CITY_DATA
+
 load_dotenv()
 
 AGENT_MODEL = os.environ.get("AGENT_MODEL", "google:gemini-2.0-flash")
@@ -127,6 +129,20 @@ def resolve_model():
 BUSINESS_TYPE_VALUES = ("vendor", "dairy", "textiles", "retail", "handicrafts", "food_stall")
 DISTRICT_VALUES = ("latur", "sitapur", "indore")
 
+# Every serviced block name, across all three districts (block names don't
+# collide across districts, so one flat set is fine). Extracted from
+# city_data.py so it can never drift out of sync with what the rest of the
+# app (feasibility report, contacts, etc.) actually services. block is
+# constrained to exactly these strings - free-text extraction here was the
+# bug: the frontend's block <select> is a controlled dropdown matched by
+# exact string, so a slightly different casing or spelling that isn't one of
+# these options would fill the profile with a value the dropdown can't
+# display, making it look like the field silently failed to autofill.
+BLOCK_VALUES = tuple(block for district in CITY_DATA.values() for block in district["blocks"])
+BLOCKS_BY_DISTRICT_TEXT = " ".join(
+    f"{district['district']} has {', '.join(district['blocks'].keys())}." for district in CITY_DATA.values()
+)
+
 
 class ProfilePatch(BaseModel):
     """Fields the agent has confidently extracted so far. Every field is
@@ -138,7 +154,9 @@ class ProfilePatch(BaseModel):
     district: Literal[DISTRICT_VALUES] | None = Field(
         default=None, description="Must be one of the three serviced districts: latur, sitapur, indore."
     )
-    block: str | None = Field(default=None, description="Block/tehsil name within the district, if mentioned.")
+    block: Literal[BLOCK_VALUES] | None = Field(
+        default=None, description="Exact block/tehsil name, spelled exactly as listed for that district in the system prompt - never a free-text guess."
+    )
     village: str | None = Field(default=None, description="Village name within the block, if mentioned (optional).")
     available_margin_capital: float | None = Field(
         default=None, description="The rupee amount the speaker says they already have saved/available to contribute as their 10% margin money."
@@ -181,13 +199,23 @@ Hindi/Marathi ("main Sitapur mein sabzi bechta hoon"), English, or freely code-m
 them - the same as how people actually talk in a village or small town. Extract fields from
 whatever script or mix you're given without asking the speaker to repeat themselves in English;
 only ask a clarifying follow-up if the field itself is genuinely ambiguous, never because of the
-language it was said in. Reply in the same language (or mix) the speaker just used, so the
-conversation feels natural rather than switching languages on them mid-way.
+language it was said in.
+
+Each turn tells you "Reply in: <language>" - this is the language the speaker explicitly chose
+in the app, and it is the ONLY thing that decides what language your reply_text is written in.
+Always write your reply in exactly that language (script and all - e.g. "Reply in: Hindi" means
+Devanagari Hindi, not transliterated or English), no matter what script or language mix the
+speaker's own transcript used. Never switch to match the transcript's language instead.
 
 Your only job is to fill these fields through natural conversation:
 - district: latur, sitapur, or indore (only these three are serviced - if they name another
   place, gently say you currently only support these three and ask them to pick the closest one)
-- block: the block/tehsil/area within that district
+- block: the block/tehsil within that district - each district only services these exact
+  blocks: {blocks_by_district}. Map whatever the speaker says (any spelling, script, or
+  mispronunciation, e.g. "ausa", "औसा", "Ausa taluka") to the exact block name as spelled above -
+  never write it back in a different spelling or casing. If what they name isn't one of their
+  district's listed blocks, say so plainly and ask them to pick one of the serviced blocks instead
+  of guessing or inventing a close match.
 - village: the village name, if they mention one (optional, don't push hard for this)
 - business_type: vendor, dairy, textiles, retail, handicrafts, or food_stall
 - available_margin_capital: how much money in rupees they already have saved that they could put
@@ -198,7 +226,7 @@ Your only job is to fill these fields through natural conversation:
 Never invent a number they didn't say. If unsure, ask a clarifying follow-up instead of guessing.
 Once all four required fields (district, block, business_type, available_margin_capital) are
 filled, set done=true and give a warm closing line telling them you're building their feasibility
-report and loan eligibility now."""
+report and loan eligibility now.""".format(blocks_by_district=BLOCKS_BY_DISTRICT_TEXT)
 
 _intake_agent: Agent | None = None
 
@@ -242,6 +270,54 @@ def get_advisory_agent() -> Agent:
     if _advisory_agent is None:
         _advisory_agent = Agent(resolve_model(), output_type=AdvisoryResult, system_prompt=ADVISORY_SYSTEM_PROMPT)
     return _advisory_agent
+
+
+# ---------------------------------------------------------------------------
+# Viability explainer - narrates the Hyper-Local Viability Engine's
+# deterministic output (viability_engine.py). Same "narrate given numbers,
+# never invent or recompute one" contract as the advisory agent above, with
+# the explicit guardrails the engine's product framing requires: no
+# guaranteed outcomes, and provenance (verified/demo/user-provided) must be
+# represented honestly rather than implied to be more certain than it is.
+# ---------------------------------------------------------------------------
+
+class ViabilityExplanation(BaseModel):
+    plain_language_summary: str = Field(
+        description="2-4 sentences explaining the overall score and recommendation in plain language for a first-time entrepreneur."
+    )
+    risk_explanation: str = Field(description="1-2 sentences on the most important risk(s) driving the score down, if any.")
+    next_steps: list[str] = Field(description="2-4 concrete, specific things the entrepreneur should validate or do next, grounded in the given data.")
+    clarification_questions: list[str] = Field(
+        default_factory=list, description="Questions to ask the entrepreneur that would improve confidence if answered (e.g. missing financial fields)."
+    )
+
+
+VIABILITY_EXPLAINER_SYSTEM_PROMPT = """You are explaining a deterministic business
+decision-support analysis to a rural or semi-urban Indian entrepreneur, in warm,
+plain language with no financial jargon.
+
+Hard rules:
+- Do not invent facts. Use only the structured data you are given.
+- Never change, recompute, or contradict any score, number, EMI, DSCR, or scheme
+  figure in the input - you only explain what is already there.
+- Clearly distinguish verified, estimated, demo, and user-provided information when
+  it matters to the explanation (e.g. if confidence is low because the underlying
+  data is illustrative/demo rather than live, say so plainly rather than implying
+  it is verified).
+- Do not provide guaranteed financial outcomes, guaranteed loan approval, or
+  guaranteed market success - use language like "potential opportunity",
+  "indicative financing", and "decision support", never "guaranteed" or "approved".
+- If hard_constraints are present in the input, your summary must reflect them
+  honestly even if the overall score alone looks high."""
+
+_viability_explainer_agent: Agent | None = None
+
+
+def get_viability_explainer_agent() -> Agent:
+    global _viability_explainer_agent
+    if _viability_explainer_agent is None:
+        _viability_explainer_agent = Agent(resolve_model(), output_type=ViabilityExplanation, system_prompt=VIABILITY_EXPLAINER_SYSTEM_PROMPT)
+    return _viability_explainer_agent
 
 
 class FeasibilityNarrative(BaseModel):

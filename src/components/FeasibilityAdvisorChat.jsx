@@ -5,15 +5,28 @@ import { Button, Badge, Spinner } from "./ui";
 import Markdown from "./Markdown";
 
 export default function FeasibilityAdvisorChat({ district, block, businessType }) {
-  const { feasibilityChat, feasibilityChatHistory, pushFeasibilityChat, setFeasibilityChatHistory } = useAppState();
+  const { feasibilityChat, feasibilityChatHistory, pushFeasibilityChat, setFeasibilityChatHistory, resetFeasibilityChat } = useAppState();
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
   const [error, setError] = useState("");
   const scrollRef = useRef(null);
+  const reportKeyRef = useRef(`${district}|${block}|${businessType}`);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [feasibilityChat, thinking]);
+
+  // The conversation is about a specific (district, block, businessType)
+  // report - if the entrepreneur goes back and changes any of those, the
+  // old conversation would be talking about a report that's no longer on
+  // screen, so clear it rather than carrying it over to the new one.
+  useEffect(() => {
+    const key = `${district}|${block}|${businessType}`;
+    if (reportKeyRef.current !== key) {
+      reportKeyRef.current = key;
+      resetFeasibilityChat();
+    }
+  }, [district, block, businessType, resetFeasibilityChat]);
 
   async function send(message) {
     if (!message.trim() || thinking) return;
@@ -39,7 +52,7 @@ export default function FeasibilityAdvisorChat({ district, block, businessType }
   ];
 
   return (
-    <div className="paper-card rounded-2xl p-5 sm:p-7 flex flex-col h-full min-h-95">
+    <div className="paper-card rounded-2xl p-5 sm:p-7 flex flex-col h-full min-h-95 max-h-[85vh]">
       <div className="flex items-center justify-between mb-3">
         <p className="font-display text-base font-semibold">Ask Saarthi about this report</p>
         <div className="flex gap-2">

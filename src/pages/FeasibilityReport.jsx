@@ -8,6 +8,7 @@ import StepFooter from "../components/StepFooter";
 import FeasibilityAdvisorChat from "../components/FeasibilityAdvisorChat";
 import BusinessComparisonPanel from "../components/BusinessComparisonPanel";
 import BlockComparisonPanel from "../components/BlockComparisonPanel";
+import ViabilityDashboard from "../components/ViabilityDashboard";
 
 export default function FeasibilityReport() {
   const { profile, markStepReached, t } = useAppState();
@@ -139,6 +140,8 @@ export default function FeasibilityReport() {
               <PriceScale pricing={report.product_market_value} />
             </Section>
           )}
+
+          <ViabilityDashboard district={profile.district} block={profile.block} businessType={profile.businessType} />
 
           <BusinessComparisonPanel
             district={profile.district}

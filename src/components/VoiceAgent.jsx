@@ -16,6 +16,73 @@ const LANGUAGES = [
   { code: "mr-IN", label: "मराठी" },
 ];
 
+// All of this component's own UI copy (not the agent's replies, which the
+// backend already writes in the chosen language) - translated so the whole
+// chatbox matches whichever language button the entrepreneur picked, not
+// just what the agent says back.
+const UI_TEXT = {
+  "en-IN": {
+    title: "Talk to Saarthi",
+    startOver: "Start over",
+    confirmStartOver: "Start a new conversation? This clears everything you've told Saarthi so far and asks all the questions again from the start.",
+    alreadyDone: "You already finished this. Review your conversation below, or start over if you want to change everything.",
+    greetingWait: "Saarthi will say hello in a moment.",
+    thinking: "Saarthi is thinking...",
+    noSpeechSupport: "Speech recognition isn't supported in this browser - use the text box below instead.",
+    micError: "Mic error: ",
+    backendError: "Could not reach the agent backend. Is the FastAPI server running on :8000?",
+    languageQuestion: "What language will you speak?",
+    speakingLanguageAria: "Speaking language",
+    stopListening: "Stop listening",
+    startSpeaking: "Start speaking",
+    listeningPlaceholder: "Listening to you...",
+    typePlaceholder: "Or type your answer",
+    send: "Send",
+    listeningHint: "Listening... take your time, it waits for you to pause.",
+    helpText: "Press the button and speak. Saarthi asks one thing at a time, and only writes down what you actually say - press the button again if you want to stop early.",
+  },
+  "hi-IN": {
+    title: "सारथी से बात करें",
+    startOver: "फिर से शुरू करें",
+    confirmStartOver: "नई बातचीत शुरू करें? इससे अब तक की सारी जानकारी मिट जाएगी और सारे सवाल फिर से पूछे जाएंगे।",
+    alreadyDone: "आपने यह पूरा कर लिया है। नीचे अपनी बातचीत देखें, या सब कुछ बदलने के लिए फिर से शुरू करें।",
+    greetingWait: "सारथी अभी नमस्ते कहेगा।",
+    thinking: "सारथी सोच रहा है...",
+    noSpeechSupport: "इस ब्राउज़र में आवाज़ पहचानने की सुविधा नहीं है - नीचे टेक्स्ट बॉक्स का उपयोग करें।",
+    micError: "माइक में समस्या: ",
+    backendError: "एजेंट से संपर्क नहीं हो पाया। कृपया जांचें कि सर्वर चालू है।",
+    languageQuestion: "आप कौन सी भाषा में बोलेंगे?",
+    speakingLanguageAria: "बोलने की भाषा",
+    stopListening: "सुनना बंद करें",
+    startSpeaking: "बोलना शुरू करें",
+    listeningPlaceholder: "आपकी बात सुन रहे हैं...",
+    typePlaceholder: "या अपना जवाब टाइप करें",
+    send: "भेजें",
+    listeningHint: "सुन रहे हैं... अपना समय लें, यह आपके रुकने का इंतज़ार करेगा।",
+    helpText: "बटन दबाएं और बोलें। सारथी एक बार में एक सवाल पूछता है, और सिर्फ वही लिखता है जो आप कहते हैं - जल्दी रोकने के लिए बटन फिर से दबाएं।",
+  },
+  "mr-IN": {
+    title: "सारथीशी बोला",
+    startOver: "पुन्हा सुरू करा",
+    confirmStartOver: "नवीन संभाषण सुरू करायचे? यामुळे आतापर्यंतची सर्व माहिती पुसली जाईल आणि सर्व प्रश्न पुन्हा विचारले जातील.",
+    alreadyDone: "तुम्ही हे आधीच पूर्ण केले आहे. खाली तुमचे संभाषण पहा, किंवा सर्व काही बदलण्यासाठी पुन्हा सुरू करा.",
+    greetingWait: "सारथी लवकरच नमस्कार करेल.",
+    thinking: "सारथी विचार करत आहे...",
+    noSpeechSupport: "या ब्राउझरमध्ये आवाज ओळखण्याची सुविधा नाही - खालील टेक्स्ट बॉक्स वापरा.",
+    micError: "मायक्रोफोनमध्ये अडचण: ",
+    backendError: "एजंटशी संपर्क होऊ शकला नाही. कृपया सर्व्हर सुरू आहे का ते तपासा.",
+    languageQuestion: "तुम्ही कोणत्या भाषेत बोलणार?",
+    speakingLanguageAria: "बोलण्याची भाषा",
+    stopListening: "ऐकणे थांबवा",
+    startSpeaking: "बोलणे सुरू करा",
+    listeningPlaceholder: "तुमचे बोलणे ऐकत आहोत...",
+    typePlaceholder: "किंवा तुमचे उत्तर टाइप करा",
+    send: "पाठवा",
+    listeningHint: "ऐकत आहोत... तुमचा वेळ घ्या, हे तुम्ही थांबण्याची वाट पाहील.",
+    helpText: "बटण दाबा आणि बोला. सारथी एका वेळी एक प्रश्न विचारतो, आणि तुम्ही जे बोलता तेच लिहितो - लवकर थांबण्यासाठी बटण पुन्हा दाबा.",
+  },
+};
+
 function toBackendProfile(profile) {
   return {
     business_type: profile.businessType || null,
@@ -31,10 +98,12 @@ export default function VoiceAgent({ onDone }) {
   const [listening, setListening] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [typedFallback, setTypedFallback] = useState("");
+  const [interimTranscript, setInterimTranscript] = useState("");
   const [error, setError] = useState("");
   const recognitionRef = useRef(null);
   const scrollRef = useRef(null);
   const hasStarted = useRef(false);
+  const t = UI_TEXT[voiceLanguage] || UI_TEXT["en-IN"];
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -69,7 +138,7 @@ export default function VoiceAgent({ onDone }) {
       pushConversation({ role: "user", text: message });
     }
     try {
-      const res = await api.agentTurn(message, agentHistory, toBackendProfile(profile));
+      const res = await api.agentTurn(message, agentHistory, toBackendProfile(profile), voiceLanguage);
       applyProfilePatch(res.profile);
       setAgentHistory(res.history);
       pushConversation({ role: "agent", text: res.reply_text });
@@ -79,7 +148,7 @@ export default function VoiceAgent({ onDone }) {
         onDone?.();
       }
     } catch (e) {
-      setError(e.message || "Could not reach the agent backend. Is the FastAPI server running on :8000?");
+      setError(e.message || t.backendError);
     } finally {
       setThinking(false);
     }
@@ -104,7 +173,7 @@ export default function VoiceAgent({ onDone }) {
 
   async function toggleListening() {
     if (!SpeechRecognitionCtor) {
-      setError("Speech recognition isn't supported in this browser - use the text box below instead.");
+      setError(t.noSpeechSupport);
       return;
     }
     if (listening) {
@@ -139,21 +208,46 @@ export default function VoiceAgent({ onDone }) {
 
     const recognition = new SpeechRecognitionCtor();
     recognition.lang = voiceLanguage;
-    recognition.interimResults = false;
+    // continuous + interimResults so a mid-sentence pause to think doesn't
+    // trip the browser's own (very quick) silence detector and cut the
+    // user off. We decide when they're actually done ourselves, via
+    // SILENCE_TIMEOUT_MS below, resetting the timer on every new result.
+    recognition.continuous = true;
+    recognition.interimResults = true;
     recognition.maxAlternatives = 1;
+
+    let finalTranscript = "";
+    let silenceTimer = null;
+    const SILENCE_TIMEOUT_MS = 1800;
+
     recognition.onstart = () => setListening(true);
     recognition.onend = () => {
       setListening(false);
       stopVisualizer();
+      setInterimTranscript("");
+      clearTimeout(silenceTimer);
+      const transcript = finalTranscript.trim();
+      if (transcript) sendTurn(transcript);
     };
     recognition.onerror = (e) => {
-      setListening(false);
-      stopVisualizer();
-      setError(`Mic error: ${e.error}`);
+      // "no-speech" fires whenever the mic is open but hasn't picked up
+      // anything yet - not worth alarming the user over.
+      if (e.error !== "no-speech") setError(`${t.micError}${e.error}`);
+      recognition.stop();
     };
     recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      sendTurn(transcript);
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          finalTranscript += result[0].transcript + " ";
+        } else {
+          interim += result[0].transcript;
+        }
+      }
+      setInterimTranscript(interim);
+      clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(() => recognition.stop(), SILENCE_TIMEOUT_MS);
     };
     recognitionRef.current = recognition;
     recognition.start();
@@ -165,12 +259,38 @@ export default function VoiceAgent({ onDone }) {
     setTypedFallback("");
   }
 
+  function startOver() {
+    const hasProgress = conversation.length > 0 || intakeDone;
+    if (hasProgress && !window.confirm(t.confirmStartOver)) {
+      return;
+    }
+    recognitionRef.current?.stop();
+    stopVisualizer();
+    window.speechSynthesis?.cancel();
+    setError("");
+    setTypedFallback("");
+    hasStarted.current = false;
+    resetAll();
+  }
+
   return (
-    <div className="paper-card rounded-2xl p-5 sm:p-7 flex flex-col h-full min-h-105 relative">
+    <div className="paper-card rounded-2xl p-5 sm:p-7 flex flex-col h-full min-h-105 max-h-[85vh] relative">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <p className="font-display text-base font-semibold">{t.title}</p>
+        {(conversation.length > 0 || intakeDone) && (
+          <button
+            type="button"
+            onClick={startOver}
+            className="text-sm font-medium text-ink-soft underline underline-offset-4 hover:text-clay transition-colors"
+          >
+            {t.startOver}
+          </button>
+        )}
+      </div>
+
       {intakeDone && (
         <div className="mb-4 flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-xl bg-good-tint border-2 border-good/20">
-          <p className="text-[16px] text-ink font-medium">You already finished this. Review your conversation below, or start over if you want to change everything.</p>
-          <Button variant="secondary" onClick={() => { hasStarted.current = false; resetAll(); }}>Start over</Button>
+          <p className="text-[16px] text-ink font-medium">{t.alreadyDone}</p>
         </div>
       )}
 
@@ -178,7 +298,7 @@ export default function VoiceAgent({ onDone }) {
         {conversation.length === 0 && !thinking && !intakeDone && (
           <div className="h-full flex flex-col items-center justify-center text-center gap-2 text-ink-faint py-10">
             <MicIcon className="opacity-40 h-8 w-8" />
-            <p className="text-[17px]">Saarthi will say hello in a moment.</p>
+            <p className="text-[17px]">{t.greetingWait}</p>
           </div>
         )}
         {conversation.map((entry, i) => (
@@ -195,7 +315,7 @@ export default function VoiceAgent({ onDone }) {
         {thinking && (
           <div className="flex justify-start">
             <div className="rounded-2xl px-4 py-3 text-[17px] bg-pine-tint border border-pine/20 flex items-center gap-2 text-ink-soft">
-              <Spinner className="text-pine" /> Saarthi is thinking...
+              <Spinner className="text-pine" /> {t.thinking}
             </div>
           </div>
         )}
@@ -208,8 +328,8 @@ export default function VoiceAgent({ onDone }) {
       {!intakeDone && (
         <>
           <div className="flex items-center justify-between gap-3 mb-3">
-            <p className="text-[15px] font-semibold text-ink-soft">What language will you speak?</p>
-            <div className="flex rounded-xl border-2 border-line-strong bg-white p-1" role="group" aria-label="Speaking language">
+            <p className="text-[15px] font-semibold text-ink-soft">{t.languageQuestion}</p>
+            <div className="flex rounded-xl border-2 border-line-strong bg-white p-1" role="group" aria-label={t.speakingLanguageAria}>
               {LANGUAGES.map((l) => (
                 <button
                   key={l.code}
@@ -233,7 +353,7 @@ export default function VoiceAgent({ onDone }) {
               className={`relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 transition ${
                 listening ? "border-clay bg-clay-tint text-clay" : "border-pine bg-pine-tint text-pine-dim hover:bg-pine/10"
               } disabled:opacity-50`}
-              aria-label={listening ? "Stop listening" : "Start speaking"}
+              aria-label={listening ? t.stopListening : t.startSpeaking}
             >
               {listening ? (
                 <div className="flex gap-1 items-end h-6 justify-center w-full">
@@ -255,17 +375,20 @@ export default function VoiceAgent({ onDone }) {
                 value={typedFallback}
                 onChange={(e) => setTypedFallback(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && submitTyped()}
-                placeholder={listening ? "Listening to you..." : "Or type your answer"}
+                placeholder={listening ? t.listeningPlaceholder : t.typePlaceholder}
                 className="flex-1 rounded-xl border-2 border-line-strong bg-white px-4 py-3 text-[17px] outline-none focus:border-pine focus:ring-4 focus:ring-pine/15"
               />
               <Button variant="secondary" onClick={submitTyped} disabled={thinking}>
-                Send
+                {t.send}
               </Button>
             </div>
           </div>
-          <p className="mt-3 text-[15px] text-ink-soft">
-            Press the button and speak. Saarthi asks one thing at a time, and only writes down what you actually say.
-          </p>
+          {listening && (
+            <p className="mt-3 text-[16px] text-ink-soft italic min-h-6">
+              {interimTranscript ? `"${interimTranscript.trim()}"` : t.listeningHint}
+            </p>
+          )}
+          <p className="mt-3 text-[15px] text-ink-soft">{t.helpText}</p>
         </>
       )}
     </div>

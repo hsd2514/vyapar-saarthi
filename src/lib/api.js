@@ -15,10 +15,10 @@ async function request(path, options = {}) {
 export const api = {
   getCities: () => request("/api/cities"),
 
-  agentTurn: (message, history, profileSoFar) =>
+  agentTurn: (message, history, profileSoFar, language) =>
     request("/api/agent/turn", {
       method: "POST",
-      body: JSON.stringify({ message, history, profile_so_far: profileSoFar }),
+      body: JSON.stringify({ message, history, profile_so_far: profileSoFar, language }),
     }),
 
   financialStructuring: (availableMarginCapital) =>
@@ -66,6 +66,17 @@ export const api = {
     request("/api/feasibility-agent/chat", {
       method: "POST",
       body: JSON.stringify({ message, history, district, block, business_type: businessType }),
+    }),
+
+  /**
+   * Runs the Hyper-Local Business Viability Engine (deterministic scoring +
+   * best-effort AI narrative) for the given profile. Stateless - always
+   * recomputes, nothing is persisted server-side.
+   */
+  viabilityAnalyze: (payload) =>
+    request("/api/viability/analyze", {
+      method: "POST",
+      body: JSON.stringify(payload),
     }),
 
   financialAdvisorChat: (message, history) =>

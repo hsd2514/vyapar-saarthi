@@ -167,3 +167,39 @@ def get_block(district_key: str, block_name: str) -> dict | None:
     if not district:
         return None
     return district.get("blocks", {}).get(block_name)
+
+
+# ---------------------------------------------------------------------------
+# Illustrative per-block infrastructure scores (0-100), for the Hyper-Local
+# Viability Engine's Location & Infrastructure dimension. Same "static and
+# auditable, NOT a live sensor/survey feed" character as the rest of this
+# file (see module docstring) - correlated with each block's population and
+# its district's profile note (larger, more urban blocks score higher)
+# rather than assigned arbitrarily. Exposed to the API only through
+# data_providers.py, which tags every value provenance="DEMO" - never
+# presented as verified/live infrastructure data.
+# ---------------------------------------------------------------------------
+BLOCK_INFRASTRUCTURE: dict[str, dict] = {
+    # Latur district
+    "Latur": {"accessibility": 78, "transport": 75, "market_proximity": 82, "electricity": 80, "water": 65, "connectivity": 70},
+    "Ausa": {"accessibility": 60, "transport": 58, "market_proximity": 62, "electricity": 65, "water": 55, "connectivity": 50},
+    "Nilanga": {"accessibility": 55, "transport": 52, "market_proximity": 58, "electricity": 62, "water": 50, "connectivity": 45},
+    "Renapur": {"accessibility": 45, "transport": 42, "market_proximity": 48, "electricity": 55, "water": 45, "connectivity": 35},
+    "Chakur": {"accessibility": 48, "transport": 45, "market_proximity": 50, "electricity": 58, "water": 48, "connectivity": 38},
+    # Sitapur district
+    "Biswan": {"accessibility": 62, "transport": 58, "market_proximity": 68, "electricity": 60, "water": 55, "connectivity": 48},
+    "Mahmoodabad": {"accessibility": 55, "transport": 50, "market_proximity": 60, "electricity": 55, "water": 50, "connectivity": 42},
+    "Sidhauli": {"accessibility": 52, "transport": 48, "market_proximity": 56, "electricity": 52, "water": 48, "connectivity": 40},
+    "Laharpur": {"accessibility": 46, "transport": 42, "market_proximity": 50, "electricity": 48, "water": 44, "connectivity": 35},
+    "Machhrehta": {"accessibility": 40, "transport": 36, "market_proximity": 44, "electricity": 45, "water": 40, "connectivity": 30},
+    # Indore district
+    "Sanwer": {"accessibility": 72, "transport": 70, "market_proximity": 75, "electricity": 82, "water": 68, "connectivity": 65},
+    "Depalpur": {"accessibility": 65, "transport": 62, "market_proximity": 68, "electricity": 75, "water": 62, "connectivity": 58},
+    "Mhow": {"accessibility": 80, "transport": 78, "market_proximity": 78, "electricity": 85, "water": 70, "connectivity": 72},
+    "Hatod": {"accessibility": 55, "transport": 52, "market_proximity": 58, "electricity": 68, "water": 55, "connectivity": 48},
+    "Rau": {"accessibility": 68, "transport": 65, "market_proximity": 70, "electricity": 78, "water": 60, "connectivity": 62},
+}
+
+
+def get_infrastructure(block_name: str) -> dict | None:
+    return BLOCK_INFRASTRUCTURE.get(block_name)
