@@ -1,13 +1,16 @@
 """Tests for the Twilio phone-call (IVR) integration. Uses TestClient
 against the real router - the intake agent call itself is not mocked, so
 these only exercise paths that don't require a live LLM key (the "no
-speech heard" re-prompt paths) plus the pure helper function. Full
-conversational-turn coverage needs a configured AGENT_MODEL + API key and
-is exercised manually, same as the rest of the intake agent's LLM paths.
+speech heard" re-prompt paths) plus the pure helper function and the
+signature-verification gate. Full conversational-turn coverage needs a
+configured AGENT_MODEL + API key and is exercised manually, same as the
+rest of the intake agent's LLM paths.
 """
 
+from twilio.request_validator import RequestValidator
 from fastapi.testclient import TestClient
 
+import twilio_ivr
 from main import app
 from twilio_ivr import _strip_for_speech
 
@@ -24,16 +27,42 @@ def test_strip_for_speech_leaves_plain_text_untouched():
     assert _strip_for_speech("Sitapur mein sabzi bechta hoon") == "Sitapur mein sabzi bechta hoon"
 
 
-def test_gather_with_no_speech_result_reprompts_without_calling_llm():
+def test_gather_with_no_speech_result_reprompts_without_calling_llm(monkeypatch):
     """When Twilio posts an empty SpeechResult (caller said nothing
     intelligible), the endpoint must re-prompt without needing the LLM at
-    all - this must work even with no API key configured."""
+    all. Signature verification is skipped here (TWILIO_AUTH_TOKEN patched
+    empty) since this test is about the re-prompt logic, not the
+    signature gate - that's covered separately below."""
+    monkeypatch.setattr(twilio_ivr, "TWILIO_AUTH_TOKEN", "")
     resp = client.post("/api/twilio/gather", data={"CallSid": "CAtest123", "SpeechResult": ""})
     assert resp.status_code == 200
     assert "Sorry, I did not catch that" in resp.text
     assert "<Gather" in resp.text
 
 
-def test_gather_response_is_valid_twiml_content_type():
+def test_gather_response_is_valid_twiml_content_type(monkeypatch):
+    monkeypatch.setattr(twilio_ivr, "TWILIO_AUTH_TOKEN", "")
     resp = client.post("/api/twilio/gather", data={"CallSid": "CAtest456", "SpeechResult": ""})
     assert resp.headers["content-type"].startswith("application/xml")
+
+
+def test_unsigned_request_rejected_when_auth_token_configured(monkeypatch):
+    """Once TWILIO_AUTH_TOKEN is set (as it must be on any real deployment),
+    a webhook call with no/invalid X-Twilio-Signature header must be
+    rejected - this is what stops a public endpoint from being spoofed into
+    injecting fake call turns."""
+    monkeypatch.setattr(twilio_ivr, "TWILIO_AUTH_TOKEN", "test-auth-token")
+    resp = client.post("/api/twilio/gather", data={"CallSid": "CAtest789", "SpeechResult": ""})
+    assert resp.status_code == 403
+
+
+def test_correctly_signed_request_is_accepted(monkeypatch):
+    """A request signed the way Twilio actually signs it (RequestValidator
+    with the shared auth token) must pass verification."""
+    monkeypatch.setattr(twilio_ivr, "TWILIO_AUTH_TOKEN", "test-auth-token")
+    validator = RequestValidator("test-auth-token")
+    url = "http://testserver/api/twilio/gather"
+    params = {"CallSid": "CAtestsigned", "SpeechResult": ""}
+    signature = validator.compute_signature(url, params)
+    resp = client.post("/api/twilio/gather", data=params, headers={"X-Twilio-Signature": signature})
+    assert resp.status_code == 200

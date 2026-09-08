@@ -9,11 +9,12 @@ itself - it only reads numbers handed to it and talks about them.
 
 from __future__ import annotations
 
+import json
 import os
 from typing import Literal
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic_ai import Agent
 
 load_dotenv()
@@ -27,24 +28,65 @@ AGENT_MODEL = os.environ.get("AGENT_MODEL", "google:gemini-2.0-flash")
 # value in AGENT_MODEL is resolved here into an explicit OpenAI-compatible
 # model pointed at Sarvam's base URL, instead of being passed straight
 # through to Agent() as a string.
-SARVAM_BASE_URL = os.environ.get("SARVAM_BASE_URL", "https://api.sarvam.ai/v1")
+# `os.environ.get(name, default)` only falls back to `default` when the var
+# is completely unset - a `.env` line like `SARVAM_BASE_URL=` (present but
+# blank, which .env.example encourages people to leave as a placeholder)
+# sets it to "", which is NOT unset, so the default never kicks in and every
+# request goes out with an empty base URL. `or default` treats blank the
+# same as unset, which is what every "only needed if X changes their URL"
+# variable in .env.example actually means.
+SARVAM_BASE_URL = os.environ.get("SARVAM_BASE_URL") or "https://api.sarvam.ai/v1"
+
+# OpenCode Zen (https://opencode.ai/docs/zen) is a curated model gateway with
+# a temporary free tier (e.g. "muse-spark-1.3-contributor-free"). It speaks
+# OpenAI's newer Responses API (not the classic chat/completions shape Sarvam
+# uses above) at /zen/v1/responses, so it needs Pydantic AI's
+# OpenAIResponsesModel rather than OpenAIChatModel - same "no native provider
+# string" situation as Sarvam, different OpenAI-compatible wire format.
+OPENCODE_BASE_URL = os.environ.get("OPENCODE_BASE_URL") or "https://opencode.ai/zen/v1"
+
+# FastRouter (https://fastrouter.ai) is a multi-provider model router with a
+# standard OpenAI-compatible chat/completions endpoint - same wire format as
+# Sarvam above, just a different base URL and its own model-namespacing
+# convention (e.g. "z-ai/glm-5.3-flash", "anthropic/claude-opus-4.7").
+FASTROUTER_BASE_URL = os.environ.get("FASTROUTER_BASE_URL") or "https://api.fastrouter.ai/api/v1"
 
 
 def resolve_model():
     """Turn AGENT_MODEL into whatever Agent() expects: the raw string for
-    providers Pydantic AI knows natively, or an explicit OpenAIChatModel
-    pointed at Sarvam's OpenAI-compatible endpoint for `sarvam:<model>`."""
-    if not AGENT_MODEL.startswith("sarvam:"):
-        return AGENT_MODEL
-
-    from pydantic_ai.models.openai import OpenAIChatModel
+    providers Pydantic AI knows natively, or an explicit OpenAI-compatible
+    model pointed at a gateway's own base URL for providers Pydantic AI has
+    no native prefix for (sarvam:, opencode:, fastrouter:)."""
     from pydantic_ai.providers.openai import OpenAIProvider
 
-    model_name = AGENT_MODEL.removeprefix("sarvam:")
-    api_key = os.environ.get("SARVAM_API_KEY")
-    if not api_key:
-        raise RuntimeError("AGENT_MODEL is set to a sarvam: model but SARVAM_API_KEY is not set.")
-    return OpenAIChatModel(model_name, provider=OpenAIProvider(base_url=SARVAM_BASE_URL, api_key=api_key))
+    if AGENT_MODEL.startswith("sarvam:"):
+        from pydantic_ai.models.openai import OpenAIChatModel
+
+        model_name = AGENT_MODEL.removeprefix("sarvam:")
+        api_key = os.environ.get("SARVAM_API_KEY")
+        if not api_key:
+            raise RuntimeError("AGENT_MODEL is set to a sarvam: model but SARVAM_API_KEY is not set.")
+        return OpenAIChatModel(model_name, provider=OpenAIProvider(base_url=SARVAM_BASE_URL, api_key=api_key))
+
+    if AGENT_MODEL.startswith("opencode:"):
+        from pydantic_ai.models.openai import OpenAIResponsesModel
+
+        model_name = AGENT_MODEL.removeprefix("opencode:")
+        api_key = os.environ.get("OPENCODE_API_KEY")
+        if not api_key:
+            raise RuntimeError("AGENT_MODEL is set to an opencode: model but OPENCODE_API_KEY is not set.")
+        return OpenAIResponsesModel(model_name, provider=OpenAIProvider(base_url=OPENCODE_BASE_URL, api_key=api_key))
+
+    if AGENT_MODEL.startswith("fastrouter:"):
+        from pydantic_ai.models.openai import OpenAIChatModel
+
+        model_name = AGENT_MODEL.removeprefix("fastrouter:")
+        api_key = os.environ.get("FASTROUTER_API_KEY")
+        if not api_key:
+            raise RuntimeError("AGENT_MODEL is set to a fastrouter: model but FASTROUTER_API_KEY is not set.")
+        return OpenAIChatModel(model_name, provider=OpenAIProvider(base_url=FASTROUTER_BASE_URL, api_key=api_key))
+
+    return AGENT_MODEL
 
 
 BUSINESS_TYPE_VALUES = ("vendor", "dairy", "textiles", "retail", "handicrafts", "food_stall")
@@ -74,6 +116,23 @@ class ConversationTurn(BaseModel):
     reply_text: str = Field(description="What the agent should say next, spoken aloud via TTS. Warm, plain language, one short question at a time.")
     profile: ProfilePatch = Field(description="The full accumulated profile so far, including this turn's new information merged in.")
     done: bool = Field(description="True once business_type, district, block, and available_margin_capital are all filled.")
+
+    @field_validator("profile", mode="before")
+    @classmethod
+    def _accept_stringified_profile(cls, v):
+        """Some models (observed with glm-5.3-flash via FastRouter) emit a
+        nested object field as a JSON *string* instead of a real nested
+        object in their tool-call arguments - technically invalid against
+        the schema, but recoverable. Without this, that one quirk burns
+        every retry and the whole turn fails even though the model actually
+        extracted the right fields. Only string values are touched; a
+        properly-nested dict/ProfilePatch passes through unchanged."""
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return v
+        return v
 
 
 INTAKE_SYSTEM_PROMPT = """You are Saarthi, a warm, plain-spoken voice assistant helping a rural
