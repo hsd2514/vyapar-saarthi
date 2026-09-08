@@ -66,3 +66,79 @@ def test_correctly_signed_request_is_accepted(monkeypatch):
     signature = validator.compute_signature(url, params)
     resp = client.post("/api/twilio/gather", data=params, headers={"X-Twilio-Signature": signature})
     assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Outbound "call me" endpoint - Twilio's own REST client is mocked so these
+# tests never place a real phone call or spend real Twilio credit.
+# ---------------------------------------------------------------------------
+
+def test_call_me_rejects_when_credentials_missing(monkeypatch):
+    monkeypatch.setattr(twilio_ivr, "TWILIO_ACCOUNT_SID", "")
+    monkeypatch.setattr(twilio_ivr, "TWILIO_AUTH_TOKEN", "test-token")
+    monkeypatch.setattr(twilio_ivr, "TWILIO_PHONE_NUMBER", "+15550000000")
+    resp = client.post("/api/twilio/call-me", json={"to": "+15551234567"})
+    assert resp.status_code == 500
+    assert "TWILIO_ACCOUNT_SID" in resp.json()["detail"]
+
+
+def test_call_me_rejects_when_public_base_url_missing(monkeypatch):
+    monkeypatch.setattr(twilio_ivr, "TWILIO_ACCOUNT_SID", "ACtest")
+    monkeypatch.setattr(twilio_ivr, "TWILIO_AUTH_TOKEN", "test-token")
+    monkeypatch.setattr(twilio_ivr, "TWILIO_PHONE_NUMBER", "+15550000000")
+    monkeypatch.setattr(twilio_ivr, "PUBLIC_BASE_URL", "")
+    resp = client.post("/api/twilio/call-me", json={"to": "+15551234567"})
+    assert resp.status_code == 500
+    assert "TWILIO_PUBLIC_BASE_URL" in resp.json()["detail"]
+
+
+def test_call_me_places_call_with_correct_params(monkeypatch):
+    monkeypatch.setattr(twilio_ivr, "TWILIO_ACCOUNT_SID", "ACtest")
+    monkeypatch.setattr(twilio_ivr, "TWILIO_AUTH_TOKEN", "test-token")
+    monkeypatch.setattr(twilio_ivr, "TWILIO_PHONE_NUMBER", "+15550000000")
+    monkeypatch.setattr(twilio_ivr, "PUBLIC_BASE_URL", "https://example.ngrok-free.dev")
+
+    captured = {}
+
+    class FakeCall:
+        sid = "CAfake123"
+        status = "queued"
+
+    class FakeCallsResource:
+        def create(self, **kwargs):
+            captured.update(kwargs)
+            return FakeCall()
+
+    class FakeTwilioClient:
+        def __init__(self, *a, **kw):
+            self.calls = FakeCallsResource()
+
+    monkeypatch.setattr(twilio_ivr, "TwilioClient", FakeTwilioClient)
+
+    resp = client.post("/api/twilio/call-me", json={"to": "+15551234567"})
+    assert resp.status_code == 200
+    assert resp.json() == {"call_sid": "CAfake123", "status": "queued"}
+    assert captured["to"] == "+15551234567"
+    assert captured["from_"] == "+15550000000"
+    assert captured["url"] == "https://example.ngrok-free.dev/api/twilio/voice"
+
+
+def test_call_me_surfaces_twilio_errors_as_502(monkeypatch):
+    monkeypatch.setattr(twilio_ivr, "TWILIO_ACCOUNT_SID", "ACtest")
+    monkeypatch.setattr(twilio_ivr, "TWILIO_AUTH_TOKEN", "test-token")
+    monkeypatch.setattr(twilio_ivr, "TWILIO_PHONE_NUMBER", "+15550000000")
+    monkeypatch.setattr(twilio_ivr, "PUBLIC_BASE_URL", "https://example.ngrok-free.dev")
+
+    class FakeCallsResource:
+        def create(self, **kwargs):
+            raise RuntimeError("unverified number on trial account")
+
+    class FakeTwilioClient:
+        def __init__(self, *a, **kw):
+            self.calls = FakeCallsResource()
+
+    monkeypatch.setattr(twilio_ivr, "TwilioClient", FakeTwilioClient)
+
+    resp = client.post("/api/twilio/call-me", json={"to": "+15551234567"})
+    assert resp.status_code == 502
+    assert "unverified number" in resp.json()["detail"]

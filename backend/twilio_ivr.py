@@ -26,13 +26,25 @@ from dataclasses import dataclass, field
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import Response
+from pydantic import BaseModel
 from pydantic_ai import ModelMessagesTypeAdapter
 from twilio.request_validator import RequestValidator
+from twilio.rest import Client as TwilioClient
 from twilio.twiml.voice_response import Gather, VoiceResponse
 
 from agent import ConversationTurn, ProfilePatch, get_intake_agent
 
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
+TWILIO_PHONE_NUMBER = os.environ.get("TWILIO_PHONE_NUMBER", "")
+
+# The public URL Twilio should fetch TwiML from once an OUTBOUND call is
+# answered. Unlike the inbound webhooks above (where Twilio tells us the
+# request URL), triggering an outbound call means WE tell Twilio where to
+# find /api/twilio/voice - and Twilio can't reach localhost, so this must be
+# the current public tunnel/deployment URL (e.g. the ngrok URL while
+# developing). Set this in .env each time the tunnel URL changes.
+PUBLIC_BASE_URL = os.environ.get("TWILIO_PUBLIC_BASE_URL", "")
 
 # Twilio's <Gather input="speech"> speech-to-text supports these locales for
 # the languages this app cares about. Marathi (mr-IN) is not in Twilio's
@@ -167,3 +179,54 @@ async def twilio_gather(request: Request):
         vr.say("Sorry, I did not hear anything. Please call back when you are ready.", language=SAY_VOICE_LANGUAGE)
 
     return Response(content=str(vr), media_type="application/xml")
+
+
+# ---------------------------------------------------------------------------
+# Outbound "call me" - triggered by a button in the app instead of the user
+# having to dial a Twilio number themselves. More reliable for a prototype
+# demo than relying on someone actually placing an inbound call (which on a
+# Twilio trial account only works to/from a verified caller ID, and depends
+# on the tunnel being reachable at exactly the moment they dial). This
+# reuses the SAME /api/twilio/voice and /api/twilio/gather webhooks above
+# once the call connects - no conversation logic is duplicated.
+# ---------------------------------------------------------------------------
+
+class CallMeRequest(BaseModel):
+    to: str  # E.164 format, e.g. "+919876543210"
+
+
+class CallMeResponse(BaseModel):
+    call_sid: str
+    status: str
+
+
+@router.post("/call-me", response_model=CallMeResponse)
+def call_me(req: CallMeRequest):
+    """Places an outbound call from the Twilio number to `req.to`. On a
+    Twilio trial account, `req.to` MUST already be a verified caller ID in
+    the Twilio console (Phone Numbers -> Verified Caller IDs) - Twilio
+    rejects unverified destinations on trial accounts, this is not
+    something this code can work around."""
+    if not (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_PHONE_NUMBER):
+        raise HTTPException(
+            status_code=500,
+            detail="TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER must all be set in .env to place outbound calls.",
+        )
+    if not PUBLIC_BASE_URL:
+        raise HTTPException(
+            status_code=500,
+            detail="TWILIO_PUBLIC_BASE_URL is not set - Twilio needs a public URL (e.g. your ngrok tunnel) to fetch TwiML from once the call is answered.",
+        )
+
+    client = TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+    try:
+        call = client.calls.create(
+            to=req.to,
+            from_=TWILIO_PHONE_NUMBER,
+            url=f"{PUBLIC_BASE_URL.rstrip('/')}/api/twilio/voice",
+            method="POST",
+        )
+    except Exception as exc:  # pragma: no cover - surfaced to the UI as a toast
+        raise HTTPException(status_code=502, detail=f"Twilio call creation failed: {exc}") from exc
+
+    return CallMeResponse(call_sid=call.sid, status=call.status)
