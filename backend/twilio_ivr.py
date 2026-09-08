@@ -39,8 +39,23 @@ from agent import ConversationTurn, ProfilePatch, get_intake_agent
 # up as its own line (call started, what the caller said, what Saarthi
 # replied, call ended) so watching `uv run fastapi dev` in a terminal
 # during a live demo tells the whole story without opening a debugger.
+#
+# uvicorn's default logging config only attaches handlers to its OWN
+# loggers ("uvicorn", "uvicorn.access", "uvicorn.error") - it never adds a
+# handler to the root logger. A plain `logging.getLogger("twilio_ivr")`
+# with no handler of its own silently produces nothing under `fastapi dev`,
+# even at INFO level - the access log lines you do see are uvicorn's, not
+# ours. Attaching our own StreamHandler (and setting propagate=False so it
+# doesn't ALSO try, and possibly duplicate through, a root handler some
+# other setup might add) makes this print unconditionally, regardless of
+# whatever logging config the ASGI server happens to use.
 logger = logging.getLogger("twilio_ivr")
 logger.setLevel(logging.INFO)
+logger.propagate = False
+if not logger.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter("%(asctime)s %(message)s", datefmt="%H:%M:%S"))
+    logger.addHandler(_handler)
 
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
