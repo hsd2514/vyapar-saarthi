@@ -28,6 +28,7 @@ from deterministic import (
     generate_feasibility_report,
 )
 from schemes import match_schemes
+from twilio_ivr import router as twilio_router
 
 # ---------------------------------------------------------------------------
 # In-memory share store
@@ -66,6 +67,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(twilio_router)
 
 
 # ---------------------------------------------------------------------------
