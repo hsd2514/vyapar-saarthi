@@ -47,4 +47,13 @@ BLOCK_CENTROIDS: dict[str, tuple[float, float]] = {
 
 
 def get_block_centroid(block_name: str) -> tuple[float, float] | None:
-    return BLOCK_CENTROIDS.get(block_name)
+    """Case-insensitive for the same reason city_data.py's get_block() is -
+    a voice-extracted block name can arrive in different casing than this
+    dict's keys."""
+    if block_name in BLOCK_CENTROIDS:
+        return BLOCK_CENTROIDS[block_name]
+    normalized = block_name.strip().casefold()
+    for key, value in BLOCK_CENTROIDS.items():
+        if key.casefold() == normalized:
+            return value
+    return None
