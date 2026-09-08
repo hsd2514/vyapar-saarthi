@@ -34,6 +34,8 @@ from twilio.rest import Client as TwilioClient
 from twilio.twiml.voice_response import Gather, VoiceResponse
 
 from agent import ConversationTurn, ProfilePatch, get_intake_agent
+from deterministic import calc_financial_structuring, generate_feasibility_report
+from share_store import create_share
 
 # Deliberately verbose, demo-friendly logging - every step of a call shows
 # up as its own line (call started, what the caller said, what Saarthi
@@ -69,6 +71,12 @@ TWILIO_PHONE_NUMBER = os.environ.get("TWILIO_PHONE_NUMBER", "")
 # developing). Set this in .env each time the tunnel URL changes.
 PUBLIC_BASE_URL = os.environ.get("TWILIO_PUBLIC_BASE_URL", "")
 
+# Where the shareable report link (auto-created the moment a call finishes)
+# should point - the frontend app's own origin, not the backend's. Defaults
+# to the local dev server since presenting a demo usually means the web app
+# is open on the same machine right next to this terminal.
+FRONTEND_ORIGIN = os.environ.get("TWILIO_FRONTEND_ORIGIN", "http://localhost:5173")
+
 # Twilio's <Gather input="speech"> speech-to-text supports these locales for
 # the languages this app cares about. Marathi (mr-IN) is not in Twilio's
 # supported speech-recognition locale list as of this writing, unlike the
@@ -103,6 +111,49 @@ def _strip_for_speech(text: str) -> str:
     """Same markdown-stripping the web app's TTS does - a phone call must
     never read '**' or '#' characters aloud."""
     return "".join(ch for ch in text if ch not in "*_`#").replace("\n", " ")
+
+
+def _build_report_share_link(profile: ProfilePatch) -> str | None:
+    """Called the moment a call finishes (turn.done). Computes the same
+    deterministic financial structuring + feasibility report the web app's
+    Financial Plan / Feasibility Report screens show, packages it the same
+    shape the frontend's SharedSummaryView already knows how to render, and
+    stores it via share_store - so the caller's report is a browser link
+    away instead of something that has to be read back over voice.
+
+    Returns None (and logs why) if the profile isn't complete enough to
+    compute a report from - this should only happen if turn.done is somehow
+    True without every field filled, which the intake agent's own system
+    prompt is supposed to prevent."""
+    if not (profile.district and profile.block and profile.business_type and profile.available_margin_capital):
+        logger.info("⚠️  Call marked done but profile incomplete - skipping report link. profile=%s", profile.model_dump_json())
+        return None
+
+    structuring = calc_financial_structuring(profile.available_margin_capital)
+    try:
+        feasibility = generate_feasibility_report(profile.district, profile.block, profile.business_type)
+    except ValueError as exc:
+        logger.info("⚠️  Could not build feasibility report for share link: %s", exc)
+        feasibility = None
+
+    payload = {
+        "profile": {
+            "businessType": profile.business_type,
+            "district": profile.district,
+            "block": profile.block,
+            "village": profile.village or "",
+            "availableMarginCapital": str(profile.available_margin_capital),
+        },
+        "operations": {},
+        "structuring": structuring,
+        "schedule": None,
+        "working_capital": None,
+        "feasibility": feasibility,
+        "advisory": None,
+        "contacts": [],
+    }
+    result = create_share(payload, FRONTEND_ORIGIN)
+    return result["share_url"]
 
 
 router = APIRouter(prefix="/api/twilio", tags=["twilio"])
@@ -207,7 +258,12 @@ async def twilio_gather(request: Request):
             language=SAY_VOICE_LANGUAGE,
         )
         vr.hangup()
+
+        share_url = _build_report_share_link(turn.profile)
         logger.info("✅ CALL COMPLETE  sid=%s  final_profile=%s", call_sid, turn.profile.model_dump_json())
+        if share_url:
+            logger.info("📄 REPORT READY  %s", share_url)
+
         _CALL_SESSIONS.pop(call_sid, None)
     else:
         gather = Gather(input="speech", action="/api/twilio/gather", method="POST", language=GATHER_LANGUAGE, speech_timeout="auto")
