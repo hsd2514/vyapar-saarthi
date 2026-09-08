@@ -163,10 +163,26 @@ THREAT_TEMPLATES = {
 
 
 def get_block(district_key: str, block_name: str) -> dict | None:
+    """Case-insensitive, whitespace-tolerant block lookup. Block names reach
+    this function from several sources with no consistent casing - a web
+    dropdown always sends the exact key, but a voice-extracted value (from
+    either the browser voice agent or the Twilio phone flow) can come back
+    lowercased, capitalised differently, or with stray whitespace (e.g. the
+    LLM extracting "nilanga" while the data's own key is "Nilanga"). An exact
+    dict lookup silently failed on that mismatch - the feasibility report,
+    financial structuring, and every downstream feature all quietly went
+    missing rather than erroring, which is worse than being permissive here."""
     district = CITY_DATA.get(district_key)
     if not district:
         return None
-    return district.get("blocks", {}).get(block_name)
+    blocks = district.get("blocks", {})
+    if block_name in blocks:
+        return blocks[block_name]
+    normalized = block_name.strip().casefold()
+    for key, value in blocks.items():
+        if key.casefold() == normalized:
+            return value
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -202,4 +218,13 @@ BLOCK_INFRASTRUCTURE: dict[str, dict] = {
 
 
 def get_infrastructure(block_name: str) -> dict | None:
-    return BLOCK_INFRASTRUCTURE.get(block_name)
+    """Case-insensitive for the same reason get_block() above is - a
+    voice-extracted block name can arrive in different casing than this
+    dict's keys."""
+    if block_name in BLOCK_INFRASTRUCTURE:
+        return BLOCK_INFRASTRUCTURE[block_name]
+    normalized = block_name.strip().casefold()
+    for key, value in BLOCK_INFRASTRUCTURE.items():
+        if key.casefold() == normalized:
+            return value
+    return None
