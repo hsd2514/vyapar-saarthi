@@ -10,14 +10,21 @@ const defaultProfile = {
   availableMarginCapital: "",
 };
 
-// Optional operational inputs used only for the working-capital-by-phase
-// calculation on the Repayment Plan screen - not part of the PS's 3 core
-// intake inputs, kept separate and always editable/defaultable.
+// Optional operational inputs - not part of the PS's 3 core intake inputs,
+// kept separate and always editable/defaultable. monthlyOperationalCost
+// already feeds the Repayment Plan screen's working-capital-by-phase
+// calculation and is reused as-is by the Viability Engine's Financial Fit
+// dimension (operating_expenses) - no duplicate field. The other three are
+// used only by the Financial Fit dimension on the Feasibility page.
 const defaultOperations = {
   monthlyOperationalCost: "",
   inventoryDays: "",
   receivableDays: "",
   capitaliseMoratoriumInterest: false,
+  monthlyHouseholdIncome: "",
+  monthlyHouseholdExpenses: "",
+  existingLoanEmi: "",
+  expectedBusinessRevenue: "",
 };
 
 const initialState = {
@@ -110,6 +117,10 @@ export function AppProvider({ children }) {
     setState((s) => ({ ...s, feasibilityChatHistory: history }));
   }, []);
 
+  const resetFeasibilityChat = useCallback(() => {
+    setState((s) => ({ ...s, feasibilityChat: [], feasibilityChatHistory: [] }));
+  }, []);
+
   const setVoiceLanguage = useCallback((lang) => {
     setState((s) => ({ ...s, voiceLanguage: lang }));
   }, []);
@@ -132,6 +143,7 @@ export function AppProvider({ children }) {
         markStepReached,
         pushFeasibilityChat,
         setFeasibilityChatHistory,
+        resetFeasibilityChat,
         setVoiceLanguage,
         resetAll,
       }}

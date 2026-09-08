@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import secrets
 import time
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,7 +13,16 @@ from pydantic import BaseModel
 from pydantic_ai import ModelMessagesTypeAdapter
 from pydantic_ai.messages import ModelMessage
 
-from agent import ConversationTurn, ProfilePatch, get_advisory_agent, get_feasibility_advisor_agent, get_intake_agent
+from agent import (
+    BUSINESS_TYPE_VALUES,
+    ConversationTurn,
+    DISTRICT_VALUES,
+    ProfilePatch,
+    get_advisory_agent,
+    get_feasibility_advisor_agent,
+    get_intake_agent,
+    get_viability_explainer_agent,
+)
 from city_data import BUSINESS_TYPES, CITY_DATA
 from deterministic import (
     calc_financial_structuring,
@@ -21,6 +31,7 @@ from deterministic import (
     generate_feasibility_report,
 )
 from schemes import match_schemes
+import viability_engine
 
 # ---------------------------------------------------------------------------
 # In-memory share store
@@ -80,10 +91,19 @@ def get_cities():
 # Voice intake conversation (LLM: conversation + extraction only)
 # ---------------------------------------------------------------------------
 
+
+# BCP-47 tags the frontend's language toggle sends, mapped to the plain
+# name the agent is told to reply in - the toggle is the entrepreneur's
+# explicit choice and overrides whatever language their own transcript
+# happens to be in.
+REPLY_LANGUAGE_NAMES = {"en-IN": "English", "hi-IN": "Hindi", "mr-IN": "Marathi"}
+
+
 class TurnRequest(BaseModel):
     message: str
     history: list[dict] = []  # raw pydantic-ai message dicts round-tripped from the client
     profile_so_far: ProfilePatch = ProfilePatch()
+    language: str | None = None  # BCP-47 tag, e.g. "hi-IN" - the speaker's chosen reply language
 
 
 class TurnResponse(BaseModel):
@@ -99,8 +119,10 @@ async def agent_turn(req: TurnRequest):
         message_history: list[ModelMessage] = (
             ModelMessagesTypeAdapter.validate_python(req.history) if req.history else []
         )
+        reply_language = REPLY_LANGUAGE_NAMES.get(req.language, "English")
         prompt = (
             f"Known so far: {req.profile_so_far.model_dump_json()}\n"
+            f"Reply in: {reply_language}\n"
             f"Speaker just said: {req.message}"
         )
         result = await get_intake_agent().run(prompt, message_history=message_history)
@@ -263,6 +285,55 @@ async def feasibility_agent_chat(req: FeasibilityChatRequest):
         return FeasibilityChatResponse(reply_text=result.output, history=new_history)
     except Exception as exc:  # pragma: no cover - surfaced to the UI as a toast
         raise HTTPException(status_code=502, detail=f"Feasibility advisor call failed: {exc}") from exc
+
+
+# ---------------------------------------------------------------------------
+# Hyper-Local Business Viability Engine (deterministic; see viability_engine.py
+# and the six *_engine.py modules it orchestrates). Stateless like every
+# other endpoint in this app - no persistence, no auth, matching the rest of
+# the project. The AI narrative is a best-effort addition on top of the
+# deterministic result: if it fails, the deterministic analysis still
+# returns rather than the whole request failing.
+# ---------------------------------------------------------------------------
+
+class ViabilityAnalyzeRequest(BaseModel):
+    district: Literal[DISTRICT_VALUES]
+    block: str
+    business_type: Literal[BUSINESS_TYPE_VALUES]
+    available_margin_capital: float
+    monthly_household_income: float | None = None
+    monthly_household_expenses: float | None = None
+    existing_loan_emi: float | None = None
+    expected_business_revenue: float | None = None
+    operating_expenses: float | None = None
+    include_ai_narrative: bool = True
+
+
+@app.post("/api/viability/analyze")
+async def viability_analyze(req: ViabilityAnalyzeRequest):
+    result = viability_engine.run_analysis(
+        req.district,
+        req.block,
+        req.business_type,
+        req.available_margin_capital,
+        req.monthly_household_income,
+        req.monthly_household_expenses,
+        req.existing_loan_emi,
+        req.expected_business_revenue,
+        req.operating_expenses,
+    )
+
+    result["ai_narrative"] = None
+    if req.include_ai_narrative:
+        try:
+            narrative_input = {k: v for k, v in result.items() if k not in ("dimension_details", "ai_narrative")}
+            prompt = "Structured viability analysis (deterministic - do not alter any figure):\n" + json.dumps(narrative_input, default=str)
+            narrative_result = await get_viability_explainer_agent().run(prompt)
+            result["ai_narrative"] = narrative_result.output.model_dump()
+        except Exception:  # pragma: no cover - AI narration is best-effort, never fails the analysis
+            result["ai_narrative"] = None
+
+    return result
 
 
 # ---------------------------------------------------------------------------
