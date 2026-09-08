@@ -20,6 +20,7 @@ Design:
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 from dataclasses import dataclass, field
@@ -33,6 +34,13 @@ from twilio.rest import Client as TwilioClient
 from twilio.twiml.voice_response import Gather, VoiceResponse
 
 from agent import ConversationTurn, ProfilePatch, get_intake_agent
+
+# Deliberately verbose, demo-friendly logging - every step of a call shows
+# up as its own line (call started, what the caller said, what Saarthi
+# replied, call ended) so watching `uv run fastapi dev` in a terminal
+# during a live demo tells the whole story without opening a debugger.
+logger = logging.getLogger("twilio_ivr")
+logger.setLevel(logging.INFO)
 
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
@@ -108,6 +116,10 @@ async def twilio_voice(request: Request):
     _cleanup_stale_calls()
     form = await request.form()
     call_sid = form.get("CallSid", "")
+    caller = form.get("From", "unknown")
+    direction = form.get("Direction", "unknown")
+
+    logger.info("📞 CALL STARTED  sid=%s  from=%s  direction=%s", call_sid, caller, direction)
 
     result = await get_intake_agent().run(
         "(start of conversation - greet me and ask your first question)"
@@ -115,6 +127,8 @@ async def twilio_voice(request: Request):
     turn: ConversationTurn = result.output
     history = ModelMessagesTypeAdapter.dump_python(result.all_messages(), mode="json")
     _CALL_SESSIONS[call_sid] = _CallSession(history=history, profile=turn.profile)
+
+    logger.info("🤖 SAARTHI (opening)  sid=%s  \"%s\"", call_sid, turn.reply_text)
 
     vr = VoiceResponse()
     gather = Gather(
@@ -140,20 +154,25 @@ async def twilio_gather(request: Request):
     form = await request.form()
     call_sid = form.get("CallSid", "")
     speech_result = form.get("SpeechResult", "")
+    speech_confidence = form.get("Confidence", "?")
 
     session = _CALL_SESSIONS.get(call_sid)
     if session is None:
         # Session expired or server restarted mid-call - start over gracefully
         # rather than crashing the call.
+        logger.info("⚠️  SESSION MISSING, restarting fresh  sid=%s", call_sid)
         session = _CallSession()
         _CALL_SESSIONS[call_sid] = session
 
     vr = VoiceResponse()
     if not speech_result:
+        logger.info("🔇 NO SPEECH HEARD  sid=%s", call_sid)
         gather = Gather(input="speech", action="/api/twilio/gather", method="POST", language=GATHER_LANGUAGE, speech_timeout="auto")
         gather.say("Sorry, I did not catch that. Could you say it again?", language=SAY_VOICE_LANGUAGE)
         vr.append(gather)
         return Response(content=str(vr), media_type="application/xml")
+
+    logger.info("🗣️  CALLER  sid=%s  confidence=%s  \"%s\"", call_sid, speech_confidence, speech_result)
 
     message_history = ModelMessagesTypeAdapter.validate_python(session.history) if session.history else []
     prompt = f"Known so far: {session.profile.model_dump_json()}\nSpeaker just said: {speech_result}"
@@ -164,6 +183,8 @@ async def twilio_gather(request: Request):
     session.profile = turn.profile
     session.last_active = time.time()
 
+    logger.info("🤖 SAARTHI  sid=%s  done=%s  profile=%s  \"%s\"", call_sid, turn.done, turn.profile.model_dump_json(), turn.reply_text)
+
     if turn.done:
         vr.say(_strip_for_speech(turn.reply_text), language=SAY_VOICE_LANGUAGE)
         vr.say(
@@ -171,6 +192,7 @@ async def twilio_gather(request: Request):
             language=SAY_VOICE_LANGUAGE,
         )
         vr.hangup()
+        logger.info("✅ CALL COMPLETE  sid=%s  final_profile=%s", call_sid, turn.profile.model_dump_json())
         _CALL_SESSIONS.pop(call_sid, None)
     else:
         gather = Gather(input="speech", action="/api/twilio/gather", method="POST", language=GATHER_LANGUAGE, speech_timeout="auto")
@@ -218,6 +240,8 @@ def call_me(req: CallMeRequest):
             detail="TWILIO_PUBLIC_BASE_URL is not set - Twilio needs a public URL (e.g. your ngrok tunnel) to fetch TwiML from once the call is answered.",
         )
 
+    logger.info("📲 OUTBOUND CALL TRIGGERED  to=%s  from=%s", req.to, TWILIO_PHONE_NUMBER)
+
     client = TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
     try:
         call = client.calls.create(
@@ -227,6 +251,8 @@ def call_me(req: CallMeRequest):
             method="POST",
         )
     except Exception as exc:  # pragma: no cover - surfaced to the UI as a toast
+        logger.error("❌ OUTBOUND CALL FAILED  to=%s  error=%s", req.to, exc)
         raise HTTPException(status_code=502, detail=f"Twilio call creation failed: {exc}") from exc
 
+    logger.info("📲 OUTBOUND CALL QUEUED  sid=%s  status=%s", call.sid, call.status)
     return CallMeResponse(call_sid=call.sid, status=call.status)
