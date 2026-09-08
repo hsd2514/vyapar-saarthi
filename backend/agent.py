@@ -78,13 +78,48 @@ def resolve_model():
         return OpenAIResponsesModel(model_name, provider=OpenAIProvider(base_url=OPENCODE_BASE_URL, api_key=api_key))
 
     if AGENT_MODEL.startswith("fastrouter:"):
-        from pydantic_ai.models.openai import OpenAIChatModel
-
         model_name = AGENT_MODEL.removeprefix("fastrouter:")
         api_key = os.environ.get("FASTROUTER_API_KEY")
         if not api_key:
             raise RuntimeError("AGENT_MODEL is set to a fastrouter: model but FASTROUTER_API_KEY is not set.")
-        return OpenAIChatModel(model_name, provider=OpenAIProvider(base_url=FASTROUTER_BASE_URL, api_key=api_key))
+        provider = OpenAIProvider(base_url=FASTROUTER_BASE_URL, api_key=api_key)
+
+        # FastRouter internally serves OpenAI's GPT-5 family through its own
+        # Responses API (confirmed via docs.fastrouter.ai and by hitting
+        # /api/v1/responses directly), even when called at the classic
+        # /chat/completions path - the reply comes back Responses-shaped
+        # (object: "response") and fails validation against Pydantic AI's
+        # OpenAIChatModel, which expects object: "chat.completion". Every
+        # other model tested (glm-5.3-flash, deepseek-v4-flash) speaks
+        # genuine chat/completions and works fine there. So GPT-5 models get
+        # OpenAIResponsesModel (the correct client for what FastRouter
+        # actually returns for them); everything else stays on OpenAIChatModel.
+        is_gpt5_family = model_name.split("/")[-1].startswith("gpt-5")
+
+        # Reasoning-capable models routed through FastRouter (tested:
+        # glm-5.3-flash, deepseek-v4-flash, gpt-5-nano, gpt-5.4-nano) were
+        # measured at 7-48 seconds per turn with default reasoning effort -
+        # fatal for the Twilio phone webhook's ~15s hard timeout
+        # (twilio_ivr.py). "minimal" is rejected by the gpt-5.4-nano model
+        # itself (its own error lists valid values as none/low/medium/high/
+        # xhigh) - "none" is accepted by every GPT-5 variant tested.
+        #
+        # Caveat worth knowing: bare single-message API calls with "none"
+        # measured 2.7-4.6s, but the REAL intake agent (long system prompt +
+        # tool-call schema + this ProfilePatch validator) measured 11-14s per
+        # turn across repeated runs - still under Twilio's ~15s ceiling, but
+        # with less margin than the bare-call numbers implied. Treat this as
+        # "usually fine, occasionally tight" rather than comfortably safe.
+        if is_gpt5_family:
+            from pydantic_ai.models.openai import OpenAIResponsesModel, OpenAIResponsesModelSettings
+
+            settings = OpenAIResponsesModelSettings(openai_reasoning_effort="none")
+            return OpenAIResponsesModel(model_name, provider=provider, settings=settings)
+
+        from pydantic_ai.models.openai import OpenAIChatModel, OpenAIChatModelSettings
+
+        settings = OpenAIChatModelSettings(openai_reasoning_effort="none")
+        return OpenAIChatModel(model_name, provider=provider, settings=settings)
 
     return AGENT_MODEL
 

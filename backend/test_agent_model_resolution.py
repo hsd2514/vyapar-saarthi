@@ -65,3 +65,28 @@ def test_conversation_turn_rejects_genuinely_malformed_profile_string():
     valid-JSON-but-wrongly-nested case."""
     with pytest.raises(Exception):
         agent.ConversationTurn(reply_text="ok", profile="not json at all {{{", done=False)
+
+
+def test_fastrouter_gpt5_family_uses_responses_model(monkeypatch):
+    """FastRouter serves GPT-5-family models through its own Responses API
+    even when hit at the classic /chat/completions path - the reply comes
+    back object: "response" and fails validation against Pydantic AI's
+    chat-completions parser. GPT-5 models must resolve to OpenAIResponsesModel,
+    not OpenAIChatModel, or every tool-calling turn breaks with a schema error."""
+    from pydantic_ai.models.openai import OpenAIResponsesModel
+
+    monkeypatch.setattr(agent, "AGENT_MODEL", "fastrouter:openai/gpt-5.4-nano")
+    monkeypatch.setenv("FASTROUTER_API_KEY", "test-key")
+    model = agent.resolve_model()
+    assert isinstance(model, OpenAIResponsesModel)
+
+
+def test_fastrouter_non_gpt5_model_uses_chat_model(monkeypatch):
+    """Non-GPT-5 FastRouter models (glm-5.3-flash, deepseek-v4-flash, etc.)
+    speak genuine chat/completions and must stay on OpenAIChatModel."""
+    from pydantic_ai.models.openai import OpenAIChatModel
+
+    monkeypatch.setattr(agent, "AGENT_MODEL", "fastrouter:z-ai/glm-5.3-flash")
+    monkeypatch.setenv("FASTROUTER_API_KEY", "test-key")
+    model = agent.resolve_model()
+    assert isinstance(model, OpenAIChatModel)
