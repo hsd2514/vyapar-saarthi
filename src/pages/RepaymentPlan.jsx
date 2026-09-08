@@ -7,7 +7,7 @@ import { Card, PageHeader, Section, TileGrid, FigureTile, Field, NumberInput, Ba
 import StepFooter from "../components/StepFooter";
 
 export default function RepaymentPlan() {
-  const { profile, operations, updateOperations, markStepReached } = useAppState();
+  const { profile, operations, updateOperations, markStepReached, t } = useAppState();
   const navigate = useNavigate();
   const autoFilledFor = useRef(null);
 
@@ -103,9 +103,9 @@ export default function RepaymentPlan() {
   return (
     <div className="max-w-3xl">
       <PageHeader
-        eyebrow="Step 4 of 5"
-        title="What you will pay back, and when"
-        description="You do not pay anything for the first few months. After that, the same amount every month until the loan is finished."
+        eyebrow={t("repayment.eyebrow")}
+        title={t("repayment.title")}
+        description={t("repayment.description")}
       />
 
       {loading && (

@@ -9,11 +9,12 @@ itself - it only reads numbers handed to it and talks about them.
 
 from __future__ import annotations
 
+import json
 import os
 from typing import Literal
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic_ai import Agent
 
 from city_data import CITY_DATA
@@ -29,24 +30,100 @@ AGENT_MODEL = os.environ.get("AGENT_MODEL", "google:gemini-2.0-flash")
 # value in AGENT_MODEL is resolved here into an explicit OpenAI-compatible
 # model pointed at Sarvam's base URL, instead of being passed straight
 # through to Agent() as a string.
-SARVAM_BASE_URL = os.environ.get("SARVAM_BASE_URL", "https://api.sarvam.ai/v1")
+# `os.environ.get(name, default)` only falls back to `default` when the var
+# is completely unset - a `.env` line like `SARVAM_BASE_URL=` (present but
+# blank, which .env.example encourages people to leave as a placeholder)
+# sets it to "", which is NOT unset, so the default never kicks in and every
+# request goes out with an empty base URL. `or default` treats blank the
+# same as unset, which is what every "only needed if X changes their URL"
+# variable in .env.example actually means.
+SARVAM_BASE_URL = os.environ.get("SARVAM_BASE_URL") or "https://api.sarvam.ai/v1"
+
+# OpenCode Zen (https://opencode.ai/docs/zen) is a curated model gateway with
+# a temporary free tier (e.g. "muse-spark-1.3-contributor-free"). It speaks
+# OpenAI's newer Responses API (not the classic chat/completions shape Sarvam
+# uses above) at /zen/v1/responses, so it needs Pydantic AI's
+# OpenAIResponsesModel rather than OpenAIChatModel - same "no native provider
+# string" situation as Sarvam, different OpenAI-compatible wire format.
+OPENCODE_BASE_URL = os.environ.get("OPENCODE_BASE_URL") or "https://opencode.ai/zen/v1"
+
+# FastRouter (https://fastrouter.ai) is a multi-provider model router with a
+# standard OpenAI-compatible chat/completions endpoint - same wire format as
+# Sarvam above, just a different base URL and its own model-namespacing
+# convention (e.g. "z-ai/glm-5.3-flash", "anthropic/claude-opus-4.7").
+FASTROUTER_BASE_URL = os.environ.get("FASTROUTER_BASE_URL") or "https://api.fastrouter.ai/api/v1"
 
 
 def resolve_model():
     """Turn AGENT_MODEL into whatever Agent() expects: the raw string for
-    providers Pydantic AI knows natively, or an explicit OpenAIChatModel
-    pointed at Sarvam's OpenAI-compatible endpoint for `sarvam:<model>`."""
-    if not AGENT_MODEL.startswith("sarvam:"):
-        return AGENT_MODEL
-
-    from pydantic_ai.models.openai import OpenAIChatModel
+    providers Pydantic AI knows natively, or an explicit OpenAI-compatible
+    model pointed at a gateway's own base URL for providers Pydantic AI has
+    no native prefix for (sarvam:, opencode:, fastrouter:)."""
     from pydantic_ai.providers.openai import OpenAIProvider
 
-    model_name = AGENT_MODEL.removeprefix("sarvam:")
-    api_key = os.environ.get("SARVAM_API_KEY")
-    if not api_key:
-        raise RuntimeError("AGENT_MODEL is set to a sarvam: model but SARVAM_API_KEY is not set.")
-    return OpenAIChatModel(model_name, provider=OpenAIProvider(base_url=SARVAM_BASE_URL, api_key=api_key))
+    if AGENT_MODEL.startswith("sarvam:"):
+        from pydantic_ai.models.openai import OpenAIChatModel
+
+        model_name = AGENT_MODEL.removeprefix("sarvam:")
+        api_key = os.environ.get("SARVAM_API_KEY")
+        if not api_key:
+            raise RuntimeError("AGENT_MODEL is set to a sarvam: model but SARVAM_API_KEY is not set.")
+        return OpenAIChatModel(model_name, provider=OpenAIProvider(base_url=SARVAM_BASE_URL, api_key=api_key))
+
+    if AGENT_MODEL.startswith("opencode:"):
+        from pydantic_ai.models.openai import OpenAIResponsesModel
+
+        model_name = AGENT_MODEL.removeprefix("opencode:")
+        api_key = os.environ.get("OPENCODE_API_KEY")
+        if not api_key:
+            raise RuntimeError("AGENT_MODEL is set to an opencode: model but OPENCODE_API_KEY is not set.")
+        return OpenAIResponsesModel(model_name, provider=OpenAIProvider(base_url=OPENCODE_BASE_URL, api_key=api_key))
+
+    if AGENT_MODEL.startswith("fastrouter:"):
+        model_name = AGENT_MODEL.removeprefix("fastrouter:")
+        api_key = os.environ.get("FASTROUTER_API_KEY")
+        if not api_key:
+            raise RuntimeError("AGENT_MODEL is set to a fastrouter: model but FASTROUTER_API_KEY is not set.")
+        provider = OpenAIProvider(base_url=FASTROUTER_BASE_URL, api_key=api_key)
+
+        # FastRouter internally serves OpenAI's GPT-5 family through its own
+        # Responses API (confirmed via docs.fastrouter.ai and by hitting
+        # /api/v1/responses directly), even when called at the classic
+        # /chat/completions path - the reply comes back Responses-shaped
+        # (object: "response") and fails validation against Pydantic AI's
+        # OpenAIChatModel, which expects object: "chat.completion". Every
+        # other model tested (glm-5.3-flash, deepseek-v4-flash) speaks
+        # genuine chat/completions and works fine there. So GPT-5 models get
+        # OpenAIResponsesModel (the correct client for what FastRouter
+        # actually returns for them); everything else stays on OpenAIChatModel.
+        is_gpt5_family = model_name.split("/")[-1].startswith("gpt-5")
+
+        # Reasoning-capable models routed through FastRouter (tested:
+        # glm-5.3-flash, deepseek-v4-flash, gpt-5-nano, gpt-5.4-nano) were
+        # measured at 7-48 seconds per turn with default reasoning effort -
+        # fatal for the Twilio phone webhook's ~15s hard timeout
+        # (twilio_ivr.py). "minimal" is rejected by the gpt-5.4-nano model
+        # itself (its own error lists valid values as none/low/medium/high/
+        # xhigh) - "none" is accepted by every GPT-5 variant tested.
+        #
+        # Caveat worth knowing: bare single-message API calls with "none"
+        # measured 2.7-4.6s, but the REAL intake agent (long system prompt +
+        # tool-call schema + this ProfilePatch validator) measured 11-14s per
+        # turn across repeated runs - still under Twilio's ~15s ceiling, but
+        # with less margin than the bare-call numbers implied. Treat this as
+        # "usually fine, occasionally tight" rather than comfortably safe.
+        if is_gpt5_family:
+            from pydantic_ai.models.openai import OpenAIResponsesModel, OpenAIResponsesModelSettings
+
+            settings = OpenAIResponsesModelSettings(openai_reasoning_effort="none")
+            return OpenAIResponsesModel(model_name, provider=provider, settings=settings)
+
+        from pydantic_ai.models.openai import OpenAIChatModel, OpenAIChatModelSettings
+
+        settings = OpenAIChatModelSettings(openai_reasoning_effort="none")
+        return OpenAIChatModel(model_name, provider=provider, settings=settings)
+
+    return AGENT_MODEL
 
 
 BUSINESS_TYPE_VALUES = ("vendor", "dairy", "textiles", "retail", "handicrafts", "food_stall")
@@ -92,6 +169,23 @@ class ConversationTurn(BaseModel):
     reply_text: str = Field(description="What the agent should say next, spoken aloud via TTS. Warm, plain language, one short question at a time.")
     profile: ProfilePatch = Field(description="The full accumulated profile so far, including this turn's new information merged in.")
     done: bool = Field(description="True once business_type, district, block, and available_margin_capital are all filled.")
+
+    @field_validator("profile", mode="before")
+    @classmethod
+    def _accept_stringified_profile(cls, v):
+        """Some models (observed with glm-5.3-flash via FastRouter) emit a
+        nested object field as a JSON *string* instead of a real nested
+        object in their tool-call arguments - technically invalid against
+        the schema, but recoverable. Without this, that one quirk burns
+        every retry and the whole turn fails even though the model actually
+        extracted the right fields. Only string values are touched; a
+        properly-nested dict/ProfilePatch passes through unchanged."""
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return v
+        return v
 
 
 INTAKE_SYSTEM_PROMPT = """You are Saarthi, a warm, plain-spoken voice assistant helping a rural
@@ -265,6 +359,11 @@ FEASIBILITY_ADVISOR_SYSTEM_PROMPT = """You are Saarthi, an expert hyper-local bu
 feasibility advisor for a rural or semi-urban Indian entrepreneur. You are having an ongoing,
 remembered conversation - you can refer back to anything discussed earlier in this session.
 
+The entrepreneur may type in Devanagari script (Hindi/Marathi), Roman-transliterated Hindi/
+Marathi ("yeh area underserved hai kya?"), English, or freely code-mixed between them - answer
+in whatever script or mix they just used, without asking them to switch to English. Numbers and
+place names stay as-is regardless of language.
+
 You have tools to fetch REAL, already-computed deterministic data for any (district, block,
 business_type) combination the three serviced districts support: latur, sitapur, indore.
 Serviced blocks: Latur has Latur, Ausa, Nilanga, Renapur, Chakur. Sitapur has Biswan,
@@ -350,3 +449,80 @@ def get_feasibility_advisor_agent() -> Agent:
 
     _feasibility_advisor_agent = advisor
     return _feasibility_advisor_agent
+
+
+# ---------------------------------------------------------------------------
+# Financial advisor - the same tool-calling, memory-carrying pattern as the
+# feasibility advisor above, but scoped to Module 2 (financial structuring,
+# EMI/moratorium schedule, working capital, and the scheme-matching engine).
+# The PS asks for an NLP-powered advisory assistant across both modules;
+# until this agent existed, Module 2 was a pure calculator screen with no
+# conversational layer at all.
+# ---------------------------------------------------------------------------
+
+FINANCIAL_ADVISOR_SYSTEM_PROMPT = """You are Saarthi, explaining a rural entrepreneur's loan
+structuring, repayment plan, and government scheme matches in an ongoing, remembered
+conversation. Keep answers short, plain-language, and grounded strictly in tool output.
+
+The entrepreneur may type in Devanagari script (Hindi/Marathi), Roman-transliterated Hindi/
+Marathi ("yeh scheme kyu mila?"), English, or freely code-mixed between them - answer in
+whatever script or mix they just used, without asking them to switch to English. Rupee figures,
+scheme names, and numbers stay as-is regardless of language.
+
+Hard rules:
+- ALWAYS call a tool before stating any rupee figure, interest rate, tenure, moratorium, or
+  scheme name. Never state a number from memory - call the tool again for a new margin capital
+  or project cost even if you answered a similar question earlier.
+- If asked "what if I had X instead", call the tools with that new number and be explicit this
+  is a hypothetical, not their actual filing.
+- If asked "why did I get scheme X and not Y", call scheme_match and walk through the actual
+  score_breakdown fields you got back - never invent a reason not present in that output.
+- If something is outside what the tools can answer, say so rather than guessing."""
+
+_financial_advisor_agent: Agent | None = None
+
+
+def get_financial_advisor_agent() -> Agent:
+    global _financial_advisor_agent
+    if _financial_advisor_agent is not None:
+        return _financial_advisor_agent
+
+    from deterministic import calc_financial_structuring, calc_repayment_schedule, calc_working_capital_by_phase
+    from schemes import match_schemes
+
+    advisor = Agent(resolve_model(), system_prompt=FINANCIAL_ADVISOR_SYSTEM_PROMPT)
+
+    def _safe(fn, *args):
+        try:
+            return fn(*args)
+        except ValueError as exc:
+            return {"error": str(exc)}
+
+    @advisor.tool_plain
+    def financial_structuring(available_margin_capital: float) -> dict:
+        """Project cost, max loan amount, and which scheme tier (Micro Finance or Term Loan) this margin capital qualifies for."""
+        return _safe(calc_financial_structuring, available_margin_capital)
+
+    @advisor.tool_plain
+    def repayment_schedule(
+        principal: float,
+        annual_rate_pct: float,
+        tenure_months: int,
+        moratorium_months: int,
+        capitalise_moratorium_interest: bool = False,
+    ) -> dict:
+        """The quarterly EMI/moratorium repayment schedule for a given loan principal, rate, tenure, and moratorium."""
+        return _safe(calc_repayment_schedule, principal, annual_rate_pct, tenure_months, moratorium_months, capitalise_moratorium_interest)
+
+    @advisor.tool_plain
+    def working_capital(monthly_operational_cost: float, inventory_days: float, receivable_days: float, monthly_emi: float) -> dict:
+        """Working capital needed during and after the moratorium, given monthly operating cost, inventory/receivable days, and the EMI."""
+        return _safe(calc_working_capital_by_phase, monthly_operational_cost, inventory_days, receivable_days, monthly_emi)
+
+    @advisor.tool_plain
+    def scheme_match(project_cost: float, business_type: str | None = None) -> list[dict]:
+        """Ranks real government schemes (PMEGP, Mudra tiers, Stand-Up India, PM SVANidhi, PM Vishwakarma, PMFME, dairy scheme) plus this tool's own margin-money scheme against a project cost, with the exact weighted score breakdown for each."""
+        return _safe(match_schemes, project_cost, business_type)
+
+    _financial_advisor_agent = advisor
+    return _financial_advisor_agent

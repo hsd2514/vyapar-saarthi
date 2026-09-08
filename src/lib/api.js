@@ -79,6 +79,12 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
+  financialAdvisorChat: (message, history) =>
+    request("/api/financial-advisor/chat", {
+      method: "POST",
+      body: JSON.stringify({ message, history }),
+    }),
+
   advisory: (payload) =>
     request("/api/advisory", {
       method: "POST",

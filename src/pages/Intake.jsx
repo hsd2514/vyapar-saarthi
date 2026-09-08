@@ -9,7 +9,7 @@ import VoiceAgent from "../components/VoiceAgent";
 const REQUIRED_FIELDS = ["businessType", "district", "block", "availableMarginCapital"];
 
 export default function Intake() {
-  const { profile, updateProfile, intakeDone, markStepReached } = useAppState();
+  const { profile, updateProfile, intakeDone, markStepReached, t } = useAppState();
   const [districts, setDistricts] = useState([]);
   const [useTypedMode, setUseTypedMode] = useState(false);
 
@@ -27,9 +27,9 @@ export default function Intake() {
   return (
     <div>
       <PageHeader
-        eyebrow="Step 1 of 5"
-        title="Tell us about the business you want to start"
-        description="Talk to Saarthi like you would to a person. It will ask one thing at a time and fill in the answers here. You can also type or change anything yourself."
+        eyebrow={t("intake.eyebrow")}
+        title={t("intake.title")}
+        description={t("intake.description")}
       />
 
       <div className={`grid gap-6 items-stretch ${useTypedMode ? "max-w-2xl mx-auto" : "lg:grid-cols-[1.1fr_0.9fr]"}`}>

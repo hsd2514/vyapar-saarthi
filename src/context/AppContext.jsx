@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { translate } from "../lib/i18n";
 
 const STORAGE_KEY = "vyapar-saarthi-margin-v1";
 
@@ -36,7 +37,10 @@ const initialState = {
   furthestStep: 0,
   feasibilityChat: [], // [{ role: "agent" | "user", text: string }] - feasibility advisor transcript
   feasibilityChatHistory: [], // raw pydantic-ai message history for the feasibility advisor - its memory
+  financialChat: [], // [{ role: "agent" | "user", text: string }] - financial/scheme advisor transcript (Module 2)
+  financialChatHistory: [], // raw pydantic-ai message history for the financial advisor - its memory
   voiceLanguage: "en-IN", // BCP-47 tag for SpeechRecognition - persisted so it survives a refresh/navigation
+  uiLanguage: "en", // "en" | "hi" | "mr" - the app chrome's own display language, independent of voiceLanguage
 };
 
 function loadInitial() {
@@ -53,7 +57,10 @@ function loadInitial() {
       furthestStep: parsed.furthestStep || 0,
       feasibilityChat: parsed.feasibilityChat || [],
       feasibilityChatHistory: parsed.feasibilityChatHistory || [],
+      financialChat: parsed.financialChat || [],
+      financialChatHistory: parsed.financialChatHistory || [],
       voiceLanguage: parsed.voiceLanguage || "en-IN",
+      uiLanguage: parsed.uiLanguage || "en",
     };
   } catch {
     return initialState;
@@ -121,9 +128,23 @@ export function AppProvider({ children }) {
     setState((s) => ({ ...s, feasibilityChat: [], feasibilityChatHistory: [] }));
   }, []);
 
+  const pushFinancialChat = useCallback((entry) => {
+    setState((s) => ({ ...s, financialChat: [...s.financialChat, entry] }));
+  }, []);
+
+  const setFinancialChatHistory = useCallback((history) => {
+    setState((s) => ({ ...s, financialChatHistory: history }));
+  }, []);
+
   const setVoiceLanguage = useCallback((lang) => {
     setState((s) => ({ ...s, voiceLanguage: lang }));
   }, []);
+
+  const setUiLanguage = useCallback((lang) => {
+    setState((s) => ({ ...s, uiLanguage: lang }));
+  }, []);
+
+  const t = useCallback((key, vars) => translate(state.uiLanguage, key, vars), [state.uiLanguage]);
 
   const resetAll = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
@@ -144,7 +165,11 @@ export function AppProvider({ children }) {
         pushFeasibilityChat,
         setFeasibilityChatHistory,
         resetFeasibilityChat,
+        pushFinancialChat,
+        setFinancialChatHistory,
         setVoiceLanguage,
+        setUiLanguage,
+        t,
         resetAll,
       }}
     >
