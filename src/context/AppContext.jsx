@@ -26,6 +26,16 @@ const defaultOperations = {
   monthlyHouseholdExpenses: "",
   existingLoanEmi: "",
   expectedBusinessRevenue: "",
+  // Required-vs-eligible cost panel (Financial Plan): which unit-cost
+  // profile/scale the user picked, whether optional lines (a shed) are in,
+  // and where their 10% margin is coming from. Kept so the choice survives
+  // navigating between steps.
+  unitCostVariant: "",
+  unitCostScale: "",
+  unitCostIncludeOptional: true,
+  marginSource: "savings",
+  moneylenderMonthlyRatePct: "3",
+  moneylenderTenureMonths: "12",
 };
 
 const initialState = {
