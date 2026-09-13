@@ -9,6 +9,7 @@ import FeasibilityAdvisorChat from "../components/FeasibilityAdvisorChat";
 import BusinessComparisonPanel from "../components/BusinessComparisonPanel";
 import BlockComparisonPanel from "../components/BlockComparisonPanel";
 import ViabilityDashboard from "../components/ViabilityDashboard";
+import AskChaupal from "../components/chaupal/AskChaupal";
 
 export default function FeasibilityReport() {
   const { profile, markStepReached, t } = useAppState();
@@ -160,6 +161,7 @@ export default function FeasibilityReport() {
         </div>
       )}
 
+      <AskChaupal topic="selling" title={`Is ${typeLabel?.toLowerCase()} working for anyone in ${profile.block}?`} />
       <StepFooter backTo="/intake" nextTo="/financial-plan" onNext={() => markStepReached(2)} />
     </div>
   );

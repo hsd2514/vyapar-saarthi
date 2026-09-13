@@ -59,6 +59,14 @@ const DICT = {
       title: "Your full plan",
       description: "Everything on one page. Print this and take it with you to the bank, the CSC centre, or your SHG group.",
     },
+    chaupal: {
+      navLabel: "Chaupal",
+      navHint: "Ask people like you",
+      eyebrow: "Vyapar Chaupal",
+      title: "Ask people who have done it",
+      description: "Questions, real experiences, and prices from entrepreneurs in your trade. Saarthi answers first with the numbers; verified officers and trainers add to it.",
+      askOthers: "Ask others like you",
+    },
   },
   hi: {
     nav: {
@@ -100,6 +108,14 @@ const DICT = {
       title: "आपकी पूरी योजना",
       description: "सब कुछ एक ही पन्ने पर। इसे प्रिंट करें और बैंक, सीएससी केंद्र या अपने एसएचजी समूह के पास ले जाएं।",
     },
+    chaupal: {
+      navLabel: "चौपाल",
+      navHint: "अपने जैसे लोगों से पूछें",
+      eyebrow: "व्यापार चौपाल",
+      title: "उनसे पूछें जिन्होंने यह किया है",
+      description: "आपके जैसे व्यवसाय वालों के सवाल, असली अनुभव और दाम। सारथी पहले आंकड़ों के साथ जवाब देता है; प्रमाणित अधिकारी और प्रशिक्षक उसमें जोड़ते हैं।",
+      askOthers: "अपने जैसे लोगों से पूछें",
+    },
   },
   mr: {
     nav: {
@@ -140,6 +156,14 @@ const DICT = {
       eyebrow: "टप्पा 5 / 5",
       title: "तुमची संपूर्ण योजना",
       description: "सर्व काही एका पानावर. हे प्रिंट करा आणि बँक, सीएससी केंद्र किंवा तुमच्या एसएचजी गटाकडे घेऊन जा.",
+    },
+    chaupal: {
+      navLabel: "चावडी",
+      navHint: "तुमच्यासारख्या लोकांना विचारा",
+      eyebrow: "व्यापार चावडी",
+      title: "ज्यांनी हे केलंय त्यांना विचारा",
+      description: "तुमच्या व्यवसायातील लोकांचे प्रश्न, खरे अनुभव आणि भाव. सारथी आधी आकड्यांसह उत्तर देतो; प्रमाणित अधिकारी आणि प्रशिक्षक त्यात भर घालतात.",
+      askOthers: "तुमच्यासारख्या लोकांना विचारा",
     },
   },
 };

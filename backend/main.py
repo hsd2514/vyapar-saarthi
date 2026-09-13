@@ -32,6 +32,8 @@ from deterministic import (
 from schemes import match_schemes
 from share_store import cleanup_expired, create_share as _create_share, get_share as _get_share
 from twilio_ivr import router as twilio_router
+import forum_store
+from forum_router import router as forum_router
 import viability_engine
 
 _CLEANUP_INTERVAL_SECONDS = 30 * 60  # 30 minutes
@@ -46,6 +48,9 @@ async def _cleanup_expired_shares() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Vyapar Chaupal (the forum) is the one feature that persists across
+    # restarts - a SQLite file created here on first run. See forum_store.py.
+    forum_store.init_db()
     task = asyncio.create_task(_cleanup_expired_shares())
     yield
     task.cancel()
@@ -61,6 +66,7 @@ app.add_middleware(
 )
 
 app.include_router(twilio_router)
+app.include_router(forum_router)
 
 
 # ---------------------------------------------------------------------------
