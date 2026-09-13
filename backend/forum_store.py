@@ -194,7 +194,10 @@ def create_otp(phone: str) -> str:
     return code
 
 
-def verify_otp(phone: str, code: str) -> bool:
+def verify_otp(phone: str, code: str, consume: bool = True) -> bool:
+    """consume=False checks the code without using it up. The sign-in flow
+    needs that for a first-time number: the same code is checked once to
+    learn a profile is required, then again with the profile attached."""
     ph = hash_phone(phone)
     with _conn() as conn:
         row = _row(conn.execute("SELECT * FROM otp_codes WHERE phone_hash=?", (ph,)).fetchone())
@@ -203,7 +206,8 @@ def verify_otp(phone: str, code: str) -> bool:
         if not secrets.compare_digest(row["code"], code.strip()):
             conn.execute("UPDATE otp_codes SET attempts=attempts+1 WHERE phone_hash=?", (ph,))
             return False
-        conn.execute("DELETE FROM otp_codes WHERE phone_hash=?", (ph,))
+        if consume:
+            conn.execute("DELETE FROM otp_codes WHERE phone_hash=?", (ph,))
         return True
 
 

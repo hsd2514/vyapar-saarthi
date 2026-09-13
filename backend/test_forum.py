@@ -187,6 +187,16 @@ def test_sign_in_needs_profile_first_time_then_not(client):
     otp = client.post("/api/forum/auth/otp", json={"phone": "+919111111111"}).json()
     res = client.post("/api/forum/auth/verify", json={"phone": "+919111111111", "code": otp["dev_otp"]}).json()
     assert res == {"needs_profile": True}
+    # The same code must still work when re-sent with the profile - the
+    # dialog does exactly this, and it used to fail with "wrong or expired".
+    res = client.post("/api/forum/auth/verify", json={
+        "phone": "+919111111111", "code": otp["dev_otp"],
+        "profile": {"display_name": "Test", "trade": "dairy", "district": "latur", "block": "Ausa", "stage": "thinking"},
+    }).json()
+    assert "token" in res
+    # And it is single-use once actually consumed.
+    again = client.post("/api/forum/auth/verify", json={"phone": "+919111111111", "code": otp["dev_otp"]})
+    assert again.status_code == 400
     token, member = _sign_in(client, "+919111111111")
     assert member["trade"] == "dairy" and member["role"] == "member"
     assert client.get("/api/forum/me", headers=_auth(token)).json()["display_name"] == "Test"

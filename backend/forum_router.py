@@ -168,12 +168,16 @@ def _validate_profile(p: ProfileIn) -> None:
 
 @router.post("/auth/verify")
 def verify_otp(req: VerifyRequest):
+    member = store.get_member_by_phone(req.phone)
+    # A new number with no profile yet: check the code but keep it alive,
+    # because the client will send it once more with the profile filled in.
+    if member is None and req.profile is None:
+        if not store.verify_otp(req.phone, req.code, consume=False):
+            raise HTTPException(status_code=400, detail="That code is wrong or has expired. Ask for a new one.")
+        return {"needs_profile": True}
     if not store.verify_otp(req.phone, req.code):
         raise HTTPException(status_code=400, detail="That code is wrong or has expired. Ask for a new one.")
-    member = store.get_member_by_phone(req.phone)
     if member is None:
-        if req.profile is None:
-            return {"needs_profile": True}
         _validate_profile(req.profile)
         member = store.upsert_member(req.phone, **req.profile.model_dump())
     elif req.profile is not None:
