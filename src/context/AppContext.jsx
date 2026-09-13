@@ -26,6 +26,9 @@ const defaultOperations = {
   monthlyHouseholdExpenses: "",
   existingLoanEmi: "",
   expectedBusinessRevenue: "",
+  // Calendar month (1-12) the loan is expected to start - lets the
+  // stress test on the Repayment Plan page map quarters to real seasons.
+  loanStartMonth: "",
 };
 
 const initialState = {

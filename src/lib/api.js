@@ -39,6 +39,18 @@ export const api = {
       }),
     }),
 
+  /**
+   * Worst-quarter stress test: the category's seasonal income pattern laid
+   * over the repayment schedule, the quarter where the instalment exceeds
+   * the surplus, a reserve target for the free period, and survival months
+   * under three named shocks. Deterministic.
+   */
+  stressTest: (payload) =>
+    request("/api/stress-test", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
   workingCapital: (monthlyOperationalCost, inventoryDays, receivableDays, monthlyEmi) =>
     request("/api/working-capital", {
       method: "POST",
