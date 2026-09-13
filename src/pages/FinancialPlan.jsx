@@ -7,6 +7,7 @@ import { Card, PageHeader, Section, TileGrid, FigureTile, Badge, Spinner } from 
 import FinancingSplitBar from "../components/FinancingSplitBar";
 import GovSchemeMatches from "../components/GovSchemeMatches";
 import FinancialAdvisorChat from "../components/FinancialAdvisorChat";
+import CostGapPanel from "../components/CostGapPanel";
 import StepFooter from "../components/StepFooter";
 
 export default function FinancialPlan() {
@@ -68,6 +69,11 @@ export default function FinancialPlan() {
               How this is worked out: your savings are one tenth of the total. The loan is the other nine tenths, up to the scheme's limit.
             </p>
           </Card>
+
+          {/* The bank's number beside the scheme's number - see CostGapPanel. */}
+          <div className="rise-in" style={{ "--rise-delay": "60ms" }}>
+            <CostGapPanel />
+          </div>
 
           <Section
             title="The scheme you qualify for"

@@ -39,6 +39,17 @@ export const api = {
       }),
     }),
 
+  /**
+   * Required project cost (the bank's unit-cost sheet, itemised) beside the
+   * eligible project cost (margin / 10%), the gap, and how to close it -
+   * plus the true cost of a margin borrowed from a moneylender. Deterministic.
+   */
+  costGap: (payload) =>
+    request("/api/cost-gap", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
   workingCapital: (monthlyOperationalCost, inventoryDays, receivableDays, monthlyEmi) =>
     request("/api/working-capital", {
       method: "POST",
