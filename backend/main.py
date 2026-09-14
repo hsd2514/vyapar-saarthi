@@ -31,6 +31,7 @@ from deterministic import (
 )
 from schemes import match_schemes
 from share_store import cleanup_expired, create_share as _create_share, get_share as _get_share
+from stress_test import run_stress_test
 from twilio_ivr import router as twilio_router
 import viability_engine
 
@@ -171,6 +172,43 @@ def scheme_match(project_cost: float, business_type: str | None = None):
     if project_cost <= 0:
         raise HTTPException(status_code=400, detail="project_cost must be positive")
     return {"project_cost": project_cost, "matches": match_schemes(project_cost, business_type)}
+
+
+class StressTestRequest(BaseModel):
+    business_type: Literal[BUSINESS_TYPE_VALUES]
+    principal: float
+    annual_rate_pct: float
+    tenure_months: int
+    moratorium_months: int
+    avg_monthly_revenue: float
+    monthly_operating_cost: float
+    start_month: int  # calendar month (1-12) the loan starts, so quarters map to real seasons
+    capitalise_moratorium_interest: bool = False
+
+
+@app.post("/api/stress-test")
+def stress_test(req: StressTestRequest):
+    """Lays the category's seasonal income pattern over the repayment
+    schedule to find the quarter where the instalment exceeds the surplus,
+    then runs three named shocks. Returns a reserve target (save this during
+    the free period) and survival months per shock. Deterministic - see
+    stress_test.py and seasonality_data.py."""
+    if req.principal <= 0 or req.avg_monthly_revenue < 0 or req.monthly_operating_cost < 0:
+        raise HTTPException(status_code=400, detail="principal must be positive; revenue and cost cannot be negative")
+    try:
+        return run_stress_test(
+            req.business_type,
+            req.principal,
+            req.annual_rate_pct,
+            req.tenure_months,
+            req.moratorium_months,
+            req.avg_monthly_revenue,
+            req.monthly_operating_cost,
+            req.start_month,
+            req.capitalise_moratorium_interest,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 class WorkingCapitalPhaseRequest(BaseModel):
