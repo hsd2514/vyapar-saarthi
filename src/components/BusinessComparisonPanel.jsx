@@ -39,15 +39,27 @@ export default function BusinessComparisonPanel({ district, block, chosenType, m
   const [error, setError] = useState("");
   const fetchedRef = useRef(false);
 
+  const [viability, setViability] = useState(null);
+
   const handleToggle = () => {
     const next = !open;
     setOpen(next);
     if (next && !fetchedRef.current) {
       fetchedRef.current = true;
       setLoading(true);
-      api
-        .feasibilityCompare(district, block)
-        .then(setData)
+      const requests = [api.feasibilityCompare(district, block)];
+      // Viability scores need a margin capital to score Financial Fit against -
+      // skip the call entirely rather than sending a meaningless 0.
+      if (marginCapital > 0) {
+        requests.push(
+          api
+            .viabilityCompare(district, block, marginCapital)
+            .then((res) => setViability(res.by_type))
+            .catch(() => setViability(null))
+        );
+      }
+      Promise.all(requests)
+        .then(([feasibilityRes]) => setData(feasibilityRes))
         .catch((e) => setError(e.message))
         .finally(() => setLoading(false));
     }
@@ -68,23 +80,32 @@ export default function BusinessComparisonPanel({ district, block, chosenType, m
           entryPrice: r.product_market_value
             ? `₹${r.product_market_value.suggested_entry_price.toFixed(0)} / ${r.product_market_value.unit}`
             : "—",
+          viabilityScore: viability?.[key]?.overall_score ?? null,
         }))
-        .sort((a, b) => b.consumersPerComp - a.consumersPerComp)
+        // Sort by the viability engine's overall score when available (it
+        // weighs demand, competition, financial fit, location, resources,
+        // and risk together); fall back to the demand-only signal for
+        // whichever categories it couldn't score.
+        .sort((a, b) => (b.viabilityScore ?? -1) - (a.viabilityScore ?? -1) || b.consumersPerComp - a.consumersPerComp)
     : [];
 
-  // Recommended pick: demand (consumers per competitor) is the primary
-  // signal, same as the table's own sort order; when margin capital is
-  // known, break close ties in favour of the category whose opening stock
-  // is comfortably affordable within it.
+  // Recommended pick: when viability scores are available, the table is
+  // already sorted by that (it weighs demand, competition, financial fit,
+  // location, resources, and risk together), so the top row IS the pick.
+  // Without a viability score (no margin capital known yet), fall back to
+  // the demand-only heuristic, nudged by affordability.
+  const hasViabilityScores = rows.some((r) => r.viabilityScore !== null);
   const maxConsumersPerComp = Math.max(1, ...rows.map((r) => r.consumersPerComp));
-  const bestPick = rows.length
-    ? rows.reduce((best, r) => {
+  const bestPick = !rows.length
+    ? null
+    : hasViabilityScores
+    ? rows[0]
+    : rows.reduce((best, r) => {
         const demandScore = r.consumersPerComp / maxConsumersPerComp; // 0-1
         const affordable = marginCapital > 0 && r.rawEntryPrice ? marginCapital >= r.rawEntryPrice * STOCK_UNITS_ASSUMED : true;
         const blended = demandScore + (affordable ? 0.15 : 0); // small nudge, never flips a clear demand leader
         return !best || blended > best.blended ? { ...r, blended, affordable } : best;
-      }, null)
-    : null;
+      }, null);
 
   const topKey = bestPick?.key;
 
@@ -135,6 +156,9 @@ export default function BusinessComparisonPanel({ district, block, chosenType, m
                   <thead>
                     <tr className="bg-paper-dim border-b border-line">
                       <th className="px-4 py-3 text-left font-semibold text-ink-soft w-44">Category</th>
+                      {hasViabilityScores && (
+                        <th className="px-4 py-3 text-right font-semibold text-ink-soft">Viability score</th>
+                      )}
                       <th className="px-4 py-3 text-right font-semibold text-ink-soft">Potential customers</th>
                       <th className="px-4 py-3 text-right font-semibold text-ink-soft">Competitors here</th>
                       <th className="px-4 py-3 text-right font-semibold text-ink-soft">Customers per shop</th>
@@ -151,6 +175,7 @@ export default function BusinessComparisonPanel({ district, block, chosenType, m
                         isChosen={row.key === chosenType}
                         isTop={row.key === topKey}
                         isLast={idx === rows.length - 1}
+                        showViabilityScore={hasViabilityScores}
                       />
                     ))}
                   </tbody>
@@ -158,10 +183,13 @@ export default function BusinessComparisonPanel({ district, block, chosenType, m
               </div>
 
               <p className="mt-3 text-[13px] text-ink-faint leading-snug">
-                Sorted by customers per existing shop (highest opportunity first). Numbers are based on local block data - your actual results will depend on your own effort and timing.
+                {hasViabilityScores
+                  ? "Sorted by overall viability score (demand, competition, financial fit, location, resources, and risk combined)."
+                  : "Sorted by customers per existing shop (highest opportunity first)."}{" "}
+                Numbers are based on local block data - your actual results will depend on your own effort and timing.
               </p>
 
-              {bestPick && marginCapital > 0 && (
+              {bestPick && marginCapital > 0 && !hasViabilityScores && (
                 <p className="mt-2 text-[13px] text-ink-faint leading-snug">
                   Top pick factors in your saved amount too: {bestPick.affordable ? "your savings comfortably cover opening stock for this category" : "opening stock here would stretch your savings - demand is still the strongest signal"}.
                 </p>
@@ -174,7 +202,7 @@ export default function BusinessComparisonPanel({ district, block, chosenType, m
   );
 }
 
-function ComparisonRow({ row, isChosen, isTop, isLast }) {
+function ComparisonRow({ row, isChosen, isTop, isLast, showViabilityScore }) {
   const rowBase = isChosen
     ? "bg-pine-tint border-l-4 border-l-pine"
     : row.isUnderserved
@@ -208,6 +236,22 @@ function ComparisonRow({ row, isChosen, isTop, isLast }) {
           </div>
         </div>
       </td>
+      {showViabilityScore && (
+        <td className="px-4 py-3.5 text-right">
+          {row.viabilityScore !== null ? (
+            <span
+              className={`figure font-bold text-[16px] ${
+                row.viabilityScore >= 70 ? "text-good-dim" : row.viabilityScore >= 45 ? "text-gold" : "text-clay"
+              }`}
+            >
+              {row.viabilityScore.toFixed(0)}
+              <span className="text-[12px] font-normal text-ink-faint">/100</span>
+            </span>
+          ) : (
+            <span className="text-ink-faint text-[13px]">—</span>
+          )}
+        </td>
+      )}
       <td className="px-4 py-3.5 text-right">
         <span className="figure font-semibold text-ink">{formatCount(row.consumers)}</span>
       </td>

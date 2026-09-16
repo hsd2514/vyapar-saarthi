@@ -14,14 +14,14 @@ export const STEPS = [
 ];
 
 function LanguageSwitcher({ compact }) {
-  const { uiLanguage, setUiLanguage } = useAppState();
+  const { uiLanguage, setAppLanguage } = useAppState();
   return (
     <div className={`flex rounded-lg border-2 border-line-strong bg-white p-0.5 ${compact ? "" : "w-full"}`} role="group" aria-label="App language">
       {UI_LANGUAGES.map((l) => (
         <button
           key={l.code}
           type="button"
-          onClick={() => setUiLanguage(l.code)}
+          onClick={() => setAppLanguage(l.code)}
           className={`flex-1 rounded-md px-2 py-1 text-[12px] font-semibold transition ${
             uiLanguage === l.code ? "bg-pine text-white" : "text-ink-soft hover:text-ink"
           }`}

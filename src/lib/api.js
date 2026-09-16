@@ -91,6 +91,15 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
+  /**
+   * Deterministic viability score (no AI narrative) for all 6 business
+   * categories in one shot - feeds BusinessComparisonPanel's sort/column.
+   */
+  viabilityCompare: (district, block, availableMarginCapital) =>
+    request(
+      `/api/viability/compare?district=${encodeURIComponent(district)}&block=${encodeURIComponent(block)}&available_margin_capital=${encodeURIComponent(availableMarginCapital)}`
+    ),
+
   financialAdvisorChat: (message, history) =>
     request("/api/financial-advisor/chat", {
       method: "POST",

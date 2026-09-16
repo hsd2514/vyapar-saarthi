@@ -45,7 +45,7 @@ const PROVENANCE_LABELS = {
   USER_PROVIDED: "You provided this",
   ESTIMATED: "Estimated",
   ASSUMPTION: "Assumption",
-  DEMO: "Demo data",
+  DEMO: "Illustrative data",
   UNAVAILABLE: "Unavailable",
 };
 
