@@ -94,7 +94,7 @@ function toBackendProfile(profile) {
 }
 
 export default function VoiceAgent({ onDone }) {
-  const { profile, conversation, agentHistory, pushConversation, setAgentHistory, applyProfilePatch, setIntakeDone, intakeDone, resetAll, voiceLanguage, setVoiceLanguage } = useAppState();
+  const { profile, conversation, agentHistory, pushConversation, setAgentHistory, applyProfilePatch, setIntakeDone, intakeDone, resetAll, voiceLanguage, setAppLanguage } = useAppState();
   const [listening, setListening] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [typedFallback, setTypedFallback] = useState("");
@@ -334,7 +334,7 @@ export default function VoiceAgent({ onDone }) {
                 <button
                   key={l.code}
                   type="button"
-                  onClick={() => setVoiceLanguage(l.code)}
+                  onClick={() => setAppLanguage(l.code)}
                   className={`rounded-lg px-3.5 py-1.5 text-[15px] font-semibold transition ${
                     voiceLanguage === l.code ? "bg-pine text-white" : "text-ink-soft hover:text-ink"
                   }`}

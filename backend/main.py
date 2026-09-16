@@ -355,6 +355,26 @@ async def viability_analyze(req: ViabilityAnalyzeRequest):
     return result
 
 
+@app.get("/api/viability/compare")
+def viability_compare(district: str, block: str, available_margin_capital: float):
+    """Runs the deterministic viability score (no AI narrative - this feeds
+    a comparison table, not a detail view) for all 6 business categories in
+    one shot, the same 'compare every category at once' pattern as
+    /api/feasibility-report/compare. Used by BusinessComparisonPanel to sort
+    its table by viability score rather than only market-reach signals."""
+    if district not in CITY_DATA:
+        raise HTTPException(status_code=400, detail=f"Unknown district '{district}'")
+    by_type: dict = {}
+    for bt_entry in BUSINESS_TYPES:
+        bt = bt_entry["value"]
+        try:
+            result = viability_engine.run_analysis(district, block, bt, available_margin_capital)
+            by_type[bt] = {"overall_score": result["overall_score"], "recommendation": result["recommendation"]}
+        except Exception:
+            by_type[bt] = None
+    return {"district": district, "block": block, "by_type": by_type}
+
+
 # ---------------------------------------------------------------------------
 # Advisory phrasing (LLM: commentary only, on numbers already computed above)
 # ---------------------------------------------------------------------------
