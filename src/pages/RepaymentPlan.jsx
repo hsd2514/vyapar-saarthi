@@ -5,6 +5,7 @@ import { api } from "../lib/api";
 import { OPERATIONS_BENCHMARKS, formatINR } from "../data/constants";
 import { Card, PageHeader, Section, TileGrid, FigureTile, Field, NumberInput, Badge, Spinner } from "../components/ui";
 import StepFooter from "../components/StepFooter";
+import StressTestPanel from "../components/StressTestPanel";
 
 export default function RepaymentPlan() {
   const { profile, operations, updateOperations, markStepReached, t } = useAppState();
@@ -328,6 +329,11 @@ export default function RepaymentPlan() {
               workingCapital={workingCapital}
             />
           </Section>
+
+          {/* The schedule assumes flat income; this checks it against the seasons. */}
+          <div className="rise-in" style={{ "--rise-delay": "160ms" }}>
+            <StressTestPanel structuring={structuring} schedule={schedule} />
+          </div>
         </div>
       )}
 

@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { Microphone, Storefront, Coins, CalendarCheck, FileText, Check } from "@phosphor-icons/react";
+import { Microphone, Storefront, Coins, CalendarCheck, FileText, Check, UsersThree } from "@phosphor-icons/react";
 import { useAppState } from "../context/AppContext";
 import { UI_LANGUAGES } from "../lib/i18n";
 
@@ -14,14 +14,14 @@ export const STEPS = [
 ];
 
 function LanguageSwitcher({ compact }) {
-  const { uiLanguage, setUiLanguage } = useAppState();
+  const { uiLanguage, setAppLanguage } = useAppState();
   return (
     <div className={`flex rounded-lg border-2 border-line-strong bg-white p-0.5 ${compact ? "" : "w-full"}`} role="group" aria-label="App language">
       {UI_LANGUAGES.map((l) => (
         <button
           key={l.code}
           type="button"
-          onClick={() => setUiLanguage(l.code)}
+          onClick={() => setAppLanguage(l.code)}
           className={`flex-1 rounded-md px-2 py-1 text-[12px] font-semibold transition ${
             uiLanguage === l.code ? "bg-pine text-white" : "text-ink-soft hover:text-ink"
           }`}
@@ -38,6 +38,7 @@ export default function Stepper() {
   const navigate = useNavigate();
   const { furthestStep, t } = useAppState();
   const currentIndex = STEPS.findIndex((s) => s.path === location.pathname);
+  const onChaupal = location.pathname.startsWith("/chaupal");
 
   const stepState = (idx) => ({
     isActive: idx === currentIndex,
@@ -95,6 +96,21 @@ export default function Stepper() {
           })}
         </ol>
 
+        <button
+          type="button"
+          onClick={() => navigate("/chaupal")}
+          aria-current={onChaupal ? "page" : undefined}
+          className={`mt-3 w-full flex items-center gap-3 rounded-xl px-3 py-3 text-left transition ${onChaupal ? "bg-pine text-white" : "text-ink hover:bg-paper-dim"}`}
+        >
+          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${onChaupal ? "bg-white/20 text-white" : "bg-gold-tint text-gold"}`}>
+            <UsersThree size={19} weight={onChaupal ? "fill" : "regular"} />
+          </span>
+          <span className="leading-tight">
+            <span className="block text-[15px] font-semibold">{t("chaupal.navLabel")}</span>
+            <span className={`block text-[13px] ${onChaupal ? "text-white/80" : "text-ink-soft"}`}>{t("chaupal.navHint")}</span>
+          </span>
+        </button>
+
         <p className="text-sm text-ink-soft leading-relaxed border-t border-line pt-4 mt-5">
           {t("nav.footerFormula")}
         </p>
@@ -106,19 +122,25 @@ export default function Stepper() {
           <div className="h-9 w-9 rounded-lg bg-pine text-white flex items-center justify-center font-display font-bold shrink-0">व</div>
           <p className="font-display font-bold text-ink text-base tracking-tight">Vyapar Saarthi</p>
           <span className="ml-auto text-sm text-ink-soft whitespace-nowrap">
-            {t("nav.mobileStepOf", { current: Math.max(1, currentIndex + 1), total: STEPS.length })}
+            {onChaupal ? t("chaupal.navLabel") : t("nav.mobileStepOf", { current: Math.max(1, currentIndex + 1), total: STEPS.length })}
           </span>
         </div>
         <div className="px-4 pb-3">
           <div className="flex items-center justify-between gap-3 mb-2">
-            <p className="text-[15px] font-semibold text-ink">{t(`steps.${STEPS[Math.max(0, currentIndex)]?.stepNum}.label`)}</p>
+            <p className="text-[15px] font-semibold text-ink">
+              {onChaupal ? t("chaupal.navHint") : t(`steps.${STEPS[Math.max(0, currentIndex)]?.stepNum}.label`)}
+            </p>
             <LanguageSwitcher compact />
           </div>
-          <div className="flex gap-1.5">
+          <div className="flex gap-1.5 items-center">
             {STEPS.map((step, idx) => {
               const { isActive, isDone } = stepState(idx);
               return <span key={step.path} className={`h-1.5 flex-1 rounded-full ${isActive ? "bg-pine" : isDone ? "bg-pine/35" : "bg-paper-dim"}`} />;
             })}
+            <button type="button" onClick={() => navigate("/chaupal")} aria-label={t("chaupal.navLabel")}
+              className={`ml-2 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[13px] font-semibold ${onChaupal ? "bg-pine text-white" : "bg-gold-tint text-gold"}`}>
+              <UsersThree size={15} weight="fill" /> {t("chaupal.navLabel")}
+            </button>
           </div>
         </div>
       </nav>

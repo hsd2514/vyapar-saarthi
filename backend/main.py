@@ -32,7 +32,10 @@ from deterministic import (
 from schemes import match_schemes
 from cost_gap import MARGIN_SOURCES, calc_cost_gap
 from share_store import cleanup_expired, create_share as _create_share, get_share as _get_share
+from stress_test import run_stress_test
 from twilio_ivr import router as twilio_router
+import forum_store
+from forum_router import router as forum_router
 import viability_engine
 
 _CLEANUP_INTERVAL_SECONDS = 30 * 60  # 30 minutes
@@ -47,6 +50,9 @@ async def _cleanup_expired_shares() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Vyapar Chaupal (the forum) is the one feature that persists across
+    # restarts - a SQLite file created here on first run. See forum_store.py.
+    forum_store.init_db()
     task = asyncio.create_task(_cleanup_expired_shares())
     yield
     task.cancel()
@@ -62,6 +68,7 @@ app.add_middleware(
 )
 
 app.include_router(twilio_router)
+app.include_router(forum_router)
 
 
 # ---------------------------------------------------------------------------
@@ -205,6 +212,43 @@ def cost_gap(req: CostGapRequest):
         req.moneylender_monthly_rate_pct,
         req.moneylender_tenure_months,
     )
+
+
+class StressTestRequest(BaseModel):
+    business_type: Literal[BUSINESS_TYPE_VALUES]
+    principal: float
+    annual_rate_pct: float
+    tenure_months: int
+    moratorium_months: int
+    avg_monthly_revenue: float
+    monthly_operating_cost: float
+    start_month: int  # calendar month (1-12) the loan starts, so quarters map to real seasons
+    capitalise_moratorium_interest: bool = False
+
+
+@app.post("/api/stress-test")
+def stress_test(req: StressTestRequest):
+    """Lays the category's seasonal income pattern over the repayment
+    schedule to find the quarter where the instalment exceeds the surplus,
+    then runs three named shocks. Returns a reserve target (save this during
+    the free period) and survival months per shock. Deterministic - see
+    stress_test.py and seasonality_data.py."""
+    if req.principal <= 0 or req.avg_monthly_revenue < 0 or req.monthly_operating_cost < 0:
+        raise HTTPException(status_code=400, detail="principal must be positive; revenue and cost cannot be negative")
+    try:
+        return run_stress_test(
+            req.business_type,
+            req.principal,
+            req.annual_rate_pct,
+            req.tenure_months,
+            req.moratorium_months,
+            req.avg_monthly_revenue,
+            req.monthly_operating_cost,
+            req.start_month,
+            req.capitalise_moratorium_interest,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 class WorkingCapitalPhaseRequest(BaseModel):
@@ -387,6 +431,26 @@ async def viability_analyze(req: ViabilityAnalyzeRequest):
             result["ai_narrative"] = None
 
     return result
+
+
+@app.get("/api/viability/compare")
+def viability_compare(district: str, block: str, available_margin_capital: float):
+    """Runs the deterministic viability score (no AI narrative - this feeds
+    a comparison table, not a detail view) for all 6 business categories in
+    one shot, the same 'compare every category at once' pattern as
+    /api/feasibility-report/compare. Used by BusinessComparisonPanel to sort
+    its table by viability score rather than only market-reach signals."""
+    if district not in CITY_DATA:
+        raise HTTPException(status_code=400, detail=f"Unknown district '{district}'")
+    by_type: dict = {}
+    for bt_entry in BUSINESS_TYPES:
+        bt = bt_entry["value"]
+        try:
+            result = viability_engine.run_analysis(district, block, bt, available_margin_capital)
+            by_type[bt] = {"overall_score": result["overall_score"], "recommendation": result["recommendation"]}
+        except Exception:
+            by_type[bt] = None
+    return {"district": district, "block": block, "by_type": by_type}
 
 
 # ---------------------------------------------------------------------------

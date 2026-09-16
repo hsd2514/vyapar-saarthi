@@ -50,6 +50,18 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
+  /**
+   * Worst-quarter stress test: the category's seasonal income pattern laid
+   * over the repayment schedule, the quarter where the instalment exceeds
+   * the surplus, a reserve target for the free period, and survival months
+   * under three named shocks. Deterministic.
+   */
+  stressTest: (payload) =>
+    request("/api/stress-test", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
   workingCapital: (monthlyOperationalCost, inventoryDays, receivableDays, monthlyEmi) =>
     request("/api/working-capital", {
       method: "POST",
@@ -89,6 +101,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+
+  /**
+   * Deterministic viability score (no AI narrative) for all 6 business
+   * categories in one shot - feeds BusinessComparisonPanel's sort/column.
+   */
+  viabilityCompare: (district, block, availableMarginCapital) =>
+    request(
+      `/api/viability/compare?district=${encodeURIComponent(district)}&block=${encodeURIComponent(block)}&available_margin_capital=${encodeURIComponent(availableMarginCapital)}`
+    ),
 
   financialAdvisorChat: (message, history) =>
     request("/api/financial-advisor/chat", {

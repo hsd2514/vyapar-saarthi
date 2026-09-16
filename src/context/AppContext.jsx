@@ -1,6 +1,14 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { translate } from "../lib/i18n";
 
+// A single "app language" (en/hi/mr) drives both the UI chrome's display
+// language AND the voice agent's speech-recognition/reply language - they
+// used to be two independent toggles a user could set inconsistently (UI in
+// English, voice in Hindi). LANG_TO_VOICE maps the plain code to the
+// BCP-47 tag SpeechRecognition/TTS actually needs.
+const LANG_TO_VOICE = { en: "en-IN", hi: "hi-IN", mr: "mr-IN" };
+const VOICE_TO_LANG = { "en-IN": "en", "hi-IN": "hi", "mr-IN": "mr" };
+
 const STORAGE_KEY = "vyapar-saarthi-margin-v1";
 
 const defaultProfile = {
@@ -36,6 +44,9 @@ const defaultOperations = {
   marginSource: "savings",
   moneylenderMonthlyRatePct: "3",
   moneylenderTenureMonths: "12",
+  // Calendar month (1-12) the loan is expected to start - lets the
+  // stress test on the Repayment Plan page map quarters to real seasons.
+  loanStartMonth: "",
 };
 
 const initialState = {
@@ -154,6 +165,17 @@ export function AppProvider({ children }) {
     setState((s) => ({ ...s, uiLanguage: lang }));
   }, []);
 
+  // The one setter both language toggles in the UI should call - changing
+  // it anywhere changes the UI text AND the voice agent's language together,
+  // rather than leaving them independently settable and out of sync.
+  // Accepts either form ("hi" or "hi-IN") so either toggle can call it with
+  // whatever shape it already has on hand.
+  const setAppLanguage = useCallback((lang) => {
+    const uiCode = VOICE_TO_LANG[lang] || lang;
+    const voiceCode = LANG_TO_VOICE[uiCode] || LANG_TO_VOICE.en;
+    setState((s) => ({ ...s, uiLanguage: uiCode, voiceLanguage: voiceCode }));
+  }, []);
+
   const t = useCallback((key, vars) => translate(state.uiLanguage, key, vars), [state.uiLanguage]);
 
   const resetAll = useCallback(() => {
@@ -179,6 +201,7 @@ export function AppProvider({ children }) {
         setFinancialChatHistory,
         setVoiceLanguage,
         setUiLanguage,
+        setAppLanguage,
         t,
         resetAll,
       }}

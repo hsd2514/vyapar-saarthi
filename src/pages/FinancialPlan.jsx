@@ -9,6 +9,7 @@ import GovSchemeMatches from "../components/GovSchemeMatches";
 import FinancialAdvisorChat from "../components/FinancialAdvisorChat";
 import CostGapPanel from "../components/CostGapPanel";
 import StepFooter from "../components/StepFooter";
+import AskChaupal from "../components/chaupal/AskChaupal";
 
 export default function FinancialPlan() {
   const { profile, markStepReached, t } = useAppState();
@@ -118,6 +119,7 @@ export default function FinancialPlan() {
         </div>
       )}
 
+      <AskChaupal topic="loan_scheme" title={scheme ? `Anyone got the ${scheme.name} for this? How long did it take?` : "Which scheme did you get, and how long did it take?"} />
       <StepFooter backTo="/feasibility" nextTo="/repayment-plan" nextDisabled={!scheme} onNext={() => markStepReached(3)} />
     </div>
   );
