@@ -40,6 +40,17 @@ export const api = {
     }),
 
   /**
+   * Required project cost (the bank's unit-cost sheet, itemised) beside the
+   * eligible project cost (margin / 10%), the gap, and how to close it -
+   * plus the true cost of a margin borrowed from a moneylender. Deterministic.
+   */
+  costGap: (payload) =>
+    request("/api/cost-gap", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  /**
    * Worst-quarter stress test: the category's seasonal income pattern laid
    * over the repayment schedule, the quarter where the instalment exceeds
    * the surplus, a reserve target for the free period, and survival months

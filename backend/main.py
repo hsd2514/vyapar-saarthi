@@ -30,6 +30,7 @@ from deterministic import (
     generate_feasibility_report,
 )
 from schemes import match_schemes
+from cost_gap import MARGIN_SOURCES, calc_cost_gap
 from share_store import cleanup_expired, create_share as _create_share, get_share as _get_share
 from stress_test import run_stress_test
 from twilio_ivr import router as twilio_router
@@ -178,6 +179,39 @@ def scheme_match(project_cost: float, business_type: str | None = None):
     if project_cost <= 0:
         raise HTTPException(status_code=400, detail="project_cost must be positive")
     return {"project_cost": project_cost, "matches": match_schemes(project_cost, business_type)}
+
+
+class CostGapRequest(BaseModel):
+    business_type: Literal[BUSINESS_TYPE_VALUES]
+    available_margin_capital: float
+    variant_key: str | None = None
+    scale_count: int | None = None
+    include_optional: bool = True
+    margin_source: Literal[MARGIN_SOURCES] = "savings"
+    moneylender_monthly_rate_pct: float = 3.0
+    moneylender_tenure_months: int = 12
+
+
+@app.post("/api/cost-gap")
+def cost_gap(req: CostGapRequest):
+    """Required project cost (the bank's unit-cost sheet, itemised) beside the
+    eligible project cost (margin / 10%), the gap between them, and the three
+    ways to close it. Plus the true cost of the margin when it is borrowed
+    from a moneylender. Deterministic - see cost_gap.py and unit_cost_data.py."""
+    if req.available_margin_capital <= 0:
+        raise HTTPException(status_code=400, detail="available_margin_capital must be positive")
+    if req.moneylender_monthly_rate_pct < 0 or req.moneylender_tenure_months < 1:
+        raise HTTPException(status_code=400, detail="moneylender rate must be >= 0 and tenure >= 1 month")
+    return calc_cost_gap(
+        req.business_type,
+        req.available_margin_capital,
+        req.variant_key,
+        req.scale_count,
+        req.include_optional,
+        req.margin_source,
+        req.moneylender_monthly_rate_pct,
+        req.moneylender_tenure_months,
+    )
 
 
 class StressTestRequest(BaseModel):
